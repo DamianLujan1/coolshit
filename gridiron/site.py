@@ -56,6 +56,8 @@ def build_site(season: int | None, week: int | None, picks_this_week: pl.DataFra
         html = env.get_template(f"{page}.html").render(page=page, **ctx)
         (config.SITE_DIR / f"{page}.html").write_text(html)
     (config.SITE_DIR / "record.json").write_text(json.dumps(record, indent=2))
+    # so `vercel deploy site` serves /record and /methodology without .html
+    (config.SITE_DIR / "vercel.json").write_text(json.dumps({"cleanUrls": True, "trailingSlash": False}, indent=2) + "\n")
     if config.PICKS_FILE.exists():
         shutil.copy(config.PICKS_FILE, config.SITE_DIR / "picks.csv")
 

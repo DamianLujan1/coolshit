@@ -126,6 +126,8 @@ contain the test week.
 
 ## Deploying the site
 
+Live at **https://gridiron-model.vercel.app** (Vercel project `gridiron-model`, deployed from `site/`).
+
 `site/` is plain HTML. `vercel.json` at the repo root tells Vercel to serve it with no build step, so connecting
 the GitHub repo to a Vercel project deploys on every push. Alternatively `make deploy` runs
 `vercel deploy --prod --yes site` with the Vercel CLI.

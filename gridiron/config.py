@@ -44,9 +44,9 @@ TEAM_CITY = {
     "CAR": "Carolina", "CHI": "Chicago", "CIN": "Cincinnati", "CLE": "Cleveland",
     "DAL": "Dallas", "DEN": "Denver", "DET": "Detroit", "GB": "Green Bay",
     "HOU": "Houston", "IND": "Indianapolis", "JAX": "Jacksonville", "KC": "Kansas City",
-    "LA": "Los Angeles (LA)", "LAC": "Los Angeles (LAC)", "LV": "Las Vegas", "MIA": "Miami",
-    "MIN": "Minnesota", "NE": "New England", "NO": "New Orleans", "NYG": "New York (NYG)",
-    "NYJ": "New York (NYJ)", "PHI": "Philadelphia", "PIT": "Pittsburgh", "SEA": "Seattle",
+    "LA": "Los Angeles", "LAC": "Los Angeles", "LV": "Las Vegas", "MIA": "Miami",
+    "MIN": "Minnesota", "NE": "New England", "NO": "New Orleans", "NYG": "New York",
+    "NYJ": "New York", "PHI": "Philadelphia", "PIT": "Pittsburgh", "SEA": "Seattle",
     "SF": "San Francisco", "TB": "Tampa Bay", "TEN": "Tennessee", "WAS": "Washington",
 }
 
@@ -72,3 +72,10 @@ CONFIDENCE_LABELS = [
 ]
 
 KICKOFF_TZ = "America/New_York"
+
+
+def team_name(abbr: str) -> str:
+    """City name, with the abbreviation added only where two teams share a city."""
+    city = TEAM_CITY.get(abbr, abbr)
+    shared = sum(1 for c in TEAM_CITY.values() if c == city) > 1
+    return f"{city} ({abbr})" if shared else city

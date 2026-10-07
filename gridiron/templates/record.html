@@ -34,7 +34,7 @@
 <thead><tr><th>Week</th><th>Game</th><th>Pick</th><th class="num">Prob</th><th>Result</th></tr></thead>
 <tbody>
 {% for r in recent %}
-<tr><td>{{ r.season }} wk {{ r.week }}</td><td>{{ r.score }}</td><td>{{ city(r.pick) }}</td><td class="num">{{ r.pick_pct }}</td>
+<tr><td>{{ r.season }} wk {{ r.week }}</td><td>{{ r.score }}</td><td>{{ name(r.pick) }}</td><td class="num">{{ r.pick_pct }}</td>
 <td>{% if r.model_hit == 1 %}<span class="hit">hit</span>{% elif r.model_hit == 0 %}<span class="miss">miss</span>{% else %}push{% endif %}</td></tr>
 {% endfor %}
 </tbody></table>

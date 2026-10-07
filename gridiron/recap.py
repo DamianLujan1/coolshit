@@ -8,7 +8,7 @@ from . import config
 
 
 def city(abbr: str) -> str:
-    return config.TEAM_CITY.get(abbr, abbr)
+    return config.team_name(abbr)
 
 
 def _pct(t: dict) -> str:

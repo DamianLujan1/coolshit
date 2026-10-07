@@ -1,0 +1,49 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Record | Gridiron Model</title>
+<meta name="description" content="Weekly NFL game win probabilities with a public, timestamped record of every hit and miss.">
+<style>
+:root{--bg:#0f1115;--card:#171a21;--ink:#e8eaf0;--muted:#9aa3b2;--line:#262b36;--accent:#4fd1a5;--warn:#f0b35a;--bad:#ef6b6b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+header{border-bottom:1px solid var(--line);padding:16px}header .wrap{display:flex;gap:20px;align-items:baseline;flex-wrap:wrap}
+.wrap{max-width:960px;margin:0 auto;padding:0 16px}h1{font-size:20px;margin:0}nav a{margin-right:16px;color:var(--muted)}nav a.on{color:var(--ink)}
+main{padding:24px 0}h2{font-size:22px;margin:0 0 12px}h3{font-size:17px;margin:24px 0 8px}p{margin:8px 0}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:15px}th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--muted);font-weight:600}td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin:12px 0}
+.tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);color:var(--muted)}
+.tag.strong{color:var(--accent);border-color:var(--accent)}.tag.confident{color:var(--ink)}.tag.lean{color:var(--warn)}
+.hit{color:var(--accent)}.miss{color:var(--bad)}.muted{color:var(--muted)}.small{font-size:13px}
+footer{border-top:1px solid var(--line);padding:16px 0;color:var(--muted);font-size:13px}
+@media (max-width:600px){table{font-size:13px}th,td{padding:6px 4px}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+<h1>Gridiron Model</h1>
+<nav>
+<a href="/" class="">This week</a>
+<a href="/record" class="on">Record</a>
+<a href="/methodology" class="">How it works</a>
+</nav>
+</div></header>
+<main><div class="wrap">
+
+<h2>Running record vs. the baselines</h2>
+<p class="muted">Graded on the same games the model picked. Baselines are graded on the closing line from the nflverse schedules file. Brier score is the average squared error of the published probability; lower is better, 0.25 is a coin flip.</p>
+
+
+<p>No graded picks yet. The first picks were logged for week 5 of 2026; they get graded once the games are final.</p>
+
+<p class="small muted">The full pick log, with pre-kickoff timestamps, is <a href="/picks.csv">picks.csv</a>. The record as data is <a href="/record.json">record.json</a>.</p>
+
+</div></main>
+<footer><div class="wrap">
+<p>Picks are analysis for entertainment only and are not betting advice.</p>
+<p>Data from <a href="https://github.com/nflverse" rel="noopener">nflverse</a> (CC BY 4.0), loaded with nflreadpy. Team names are city names and standard abbreviations only. This site is not affiliated with or endorsed by the NFL or any team. Model v0.1.0, generated 2026-10-07 21:39 UTC.</p>
+</div></footer>
+</body>
+</html>

@@ -1,0 +1,18 @@
+# data caches (nflverse parquet files, tens of MB each) -- never commit
+data/cache/
+data/features/
+*.parquet
+# python
+.venv/
+__pycache__/
+*.pyc
+.pytest_cache/
+*.egg-info/
+build/
+dist/
+# notebooks are for exploration only
+notebooks/.ipynb_checkpoints/
+# secrets
+.env
+.env.*
+.vercel/

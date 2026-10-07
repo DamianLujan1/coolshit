@@ -1,0 +1,120 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>How it works | Gridiron Model</title>
+<meta name="description" content="Weekly NFL game win probabilities with a public, timestamped record of every hit and miss.">
+<style>
+:root{--bg:#0f1115;--card:#171a21;--ink:#e8eaf0;--muted:#9aa3b2;--line:#262b36;--accent:#4fd1a5;--warn:#f0b35a;--bad:#ef6b6b}
+*{box-sizing:border-box}body{margin:0;background:var(--bg);color:var(--ink);font:16px/1.5 system-ui,-apple-system,Segoe UI,Roboto,sans-serif}
+a{color:var(--accent);text-decoration:none}a:hover{text-decoration:underline}
+header{border-bottom:1px solid var(--line);padding:16px}header .wrap{display:flex;gap:20px;align-items:baseline;flex-wrap:wrap}
+.wrap{max-width:960px;margin:0 auto;padding:0 16px}h1{font-size:20px;margin:0}nav a{margin-right:16px;color:var(--muted)}nav a.on{color:var(--ink)}
+main{padding:24px 0}h2{font-size:22px;margin:0 0 12px}h3{font-size:17px;margin:24px 0 8px}p{margin:8px 0}
+table{width:100%;border-collapse:collapse;margin:12px 0;font-size:15px}th,td{padding:8px 6px;border-bottom:1px solid var(--line);text-align:left;vertical-align:top}th{color:var(--muted);font-weight:600}td.num,th.num{text-align:right;font-variant-numeric:tabular-nums}
+.card{background:var(--card);border:1px solid var(--line);border-radius:10px;padding:16px;margin:12px 0}
+.tag{display:inline-block;padding:2px 8px;border-radius:999px;font-size:12px;border:1px solid var(--line);color:var(--muted)}
+.tag.strong{color:var(--accent);border-color:var(--accent)}.tag.confident{color:var(--ink)}.tag.lean{color:var(--warn)}
+.hit{color:var(--accent)}.miss{color:var(--bad)}.muted{color:var(--muted)}.small{font-size:13px}
+footer{border-top:1px solid var(--line);padding:16px 0;color:var(--muted);font-size:13px}
+@media (max-width:600px){table{font-size:13px}th,td{padding:6px 4px}}
+</style>
+</head>
+<body>
+<header><div class="wrap">
+<h1>Gridiron Model</h1>
+<nav>
+<a href="/" class="">This week</a>
+<a href="/record" class="">Record</a>
+<a href="/methodology" class="on">How it works</a>
+</nav>
+</div></header>
+<main><div class="wrap">
+
+<h2>How the model works</h2>
+<p>The model answers one question for every game: how likely is the home team to win? It does that from how well each team has actually played, not from what anyone thinks of them.</p>
+
+<h3>What goes in</h3>
+<p>Every play in the NFL has an expected points value before and after the snap. The difference, expected points added or EPA, measures how much a play helped or hurt. We total that up per team and per game, split into passing and rushing, on offense and on defense. We also track success rate (the share of plays that keep an offense on schedule) and how efficient a team is on first and second down.</p>
+<p>Recent games count more than old ones. Each number is a weighted average of the team's earlier games this season, where every game back in time counts about 15% less. In September there is not much to go on, so the average starts from last season's number, pulled halfway toward league average. By mid-season the current year dominates.</p>
+<p>On top of team strength: home field, days of rest for each side, whether either team is coming off a bye, whether it is a division game, and the starting quarterback's recent EPA per dropback. When a starter changes, the new quarterback brings his own history, and a quarterback with little history is treated as roughly replacement level until he proves otherwise.</p>
+
+<h3>What never goes in</h3>
+<p>Betting lines. The closing spread and moneyline are used only to grade the model against the market, never as inputs. Nothing from after kickoff is ever used for that game: the feature pipeline has an automated test that scrambles every play from a game and all later games and checks that the game's inputs do not change.</p>
+
+<h3>The model itself</h3>
+<p>Stage one is a logistic regression on the differences between the two teams' numbers. Stage two is a gradient-boosted tree model on the same inputs, which only ships if it beats stage one on held-out seasons. Right now <strong>stage one</strong> ships.</p>
+
+<h3>How it was tested</h3>
+<p>Walk-forward: for every week of the 2023, 2024 and 2025 seasons, the model is trained only on earlier seasons and earlier weeks of that season, then predicts that week. No peeking.</p>
+
+<table>
+<thead><tr><th>Who</th><th class="num">Games</th><th class="num">Accuracy</th><th class="num">Brier</th><th class="num">Log loss</th></tr></thead>
+<tbody>
+
+
+<tr><td>Stage 1 (logistic)</td><td class="num">854</td><td class="num">64.4%</td><td class="num">0.2193</td><td class="num">0.6278</td></tr>
+
+
+
+<tr><td>Stage 2 (boosted trees)</td><td class="num">854</td><td class="num">62.6%</td><td class="num">0.2248</td><td class="num">0.6411</td></tr>
+
+
+
+<tr><td>Always pick home</td><td class="num">854</td><td class="num">54.9%</td><td class="num">0.2476</td><td class="num">0.6883</td></tr>
+
+
+
+<tr><td>Closing-spread favorite</td><td class="num">854</td><td class="num">67.9%</td><td class="num">0.2109</td><td class="num">0.6096</td></tr>
+
+
+
+<tr><td>Market moneyline, vig removed</td><td class="num">854</td><td class="num">67.9%</td><td class="num">0.2102</td><td class="num">0.6077</td></tr>
+
+
+</tbody></table>
+
+
+<p><strong>The model does not beat the closing line.</strong> The market's vig-free probabilities scored 67.9% accuracy and 0.6077 log loss; the model scored 64.4% and 0.6278. That is the expected result for a model built on public data, and the running record on this site will show it either way. What the model does well is calibration: when it says 70%, the home team has won about 70% of the time.</p>
+
+<h3>Calibration</h3>
+<p class="muted small">Games are grouped by the model's predicted home-win probability. If the model is honest, the observed rate should track the predicted rate.</p>
+<table>
+<thead><tr><th>Predicted</th><th class="num">Games</th><th class="num">Mean predicted</th><th class="num">Home actually won</th></tr></thead>
+<tbody>
+
+<tr><td>0.0-0.1</td><td class="num">1</td><td class="num">10%</td><td class="num">0%</td></tr>
+
+<tr><td>0.1-0.2</td><td class="num">21</td><td class="num">16%</td><td class="num">24%</td></tr>
+
+<tr><td>0.2-0.3</td><td class="num">56</td><td class="num">26%</td><td class="num">32%</td></tr>
+
+<tr><td>0.3-0.4</td><td class="num">121</td><td class="num">36%</td><td class="num">36%</td></tr>
+
+<tr><td>0.4-0.5</td><td class="num">134</td><td class="num">45%</td><td class="num">45%</td></tr>
+
+<tr><td>0.5-0.6</td><td class="num">164</td><td class="num">55%</td><td class="num">51%</td></tr>
+
+<tr><td>0.6-0.7</td><td class="num">163</td><td class="num">65%</td><td class="num">69%</td></tr>
+
+<tr><td>0.7-0.8</td><td class="num">124</td><td class="num">75%</td><td class="num">73%</td></tr>
+
+<tr><td>0.8-0.9</td><td class="num">62</td><td class="num">84%</td><td class="num">81%</td></tr>
+
+<tr><td>0.9-1.0</td><td class="num">8</td><td class="num">92%</td><td class="num">100%</td></tr>
+
+</tbody></table>
+
+
+<h3>Data and attribution</h3>
+<p>All data comes from the <a href="https://github.com/nflverse" rel="noopener">nflverse</a> project (play-by-play, schedules, scores and closing lines), released under <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC BY 4.0</a>, and is loaded with the nflreadpy package. FTN charting data is not used. The code is open; the pick log is append-only and committed to git with a pre-kickoff timestamp on every row.</p>
+<p>Team names on this site are city names and standard abbreviations. No league or team logos, wordmarks or trademarks are used, and this site is not affiliated with the NFL.</p>
+
+</div></main>
+<footer><div class="wrap">
+<p>Picks are analysis for entertainment only and are not betting advice.</p>
+<p>Data from <a href="https://github.com/nflverse" rel="noopener">nflverse</a> (CC BY 4.0), loaded with nflreadpy. Team names are city names and standard abbreviations only. This site is not affiliated with or endorsed by the NFL or any team. Model v0.1.0, generated 2026-10-07 21:39 UTC.</p>
+</div></footer>
+</body>
+</html>

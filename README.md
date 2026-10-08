@@ -73,8 +73,9 @@ Notebooks are welcome under `notebooks/` for exploration, but nothing in them is
 
 Everything comes from [nflverse](https://github.com/nflverse) through the
 [nflreadpy](https://github.com/nflverse/nflreadpy) package: the schedules/games dataset (scores, rest days,
-closing spread, total and moneylines) and play-by-play with expected points added. Seasons 2015 to 2026 are
-modeled; 2014 is fetched only to seed the 2015 priors.
+closing spread, total and moneylines) and play-by-play with expected points added. Features are built for
+2015 to 2026, with 2014 fetched only to seed the 2015 priors. The model itself trains only on games from 2020
+onward (`TRAIN_FIRST_SEASON` in `gridiron/config.py`); earlier seasons feed team priors and quarterback history.
 
 - nflverse data is released under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Attribution is
   in the footer of every page of the site and here: **data by nflverse**.
@@ -100,7 +101,8 @@ Data files live in `data/cache/` and are gitignored. Nothing larger than a few m
   listed by nflverse (actual for played games, projected for the coming week), falling back to the team's
   most recent starter. A new starter with no history is treated as replacement level.
 
-**Stage 1** is a logistic regression on home-minus-away differences plus the flags.
+**Stage 1** is a logistic regression on home-minus-away differences plus the flags, trained on every completed
+game from 2020 through the week before the one being predicted.
 **Stage 2** is LightGBM on the same plus each side's raw values. Stage 2 ships only if it beats stage 1 on both
 log loss and Brier in the walk-forward holdout; `gridiron backtest` makes that call and writes it to
 `reports/backtest.json`, which `gridiron weekly` obeys.

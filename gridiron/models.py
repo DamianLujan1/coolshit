@@ -74,19 +74,34 @@ class _LgbWrapper:
         return self.booster.predict(x)
 
 
+def training_set(frame: pl.DataFrame, season: int, week: int,
+                 train_first_season: int | None = None) -> pl.DataFrame:
+    """Rows a model predicting (season, week) may train on.
+
+    Every played game from `train_first_season` (default config.TRAIN_FIRST_SEASON) up to the
+    previous season, plus games of `season` with an earlier week. Nothing from the target week
+    or later is ever included.
+    """
+    start = config.TRAIN_FIRST_SEASON if train_first_season is None else train_first_season
+    return frame.filter(
+        (pl.col("season") >= start)
+        & ((pl.col("season") < season) | ((pl.col("season") == season) & (pl.col("week") < week)))
+    )
+
+
 def walk_forward(frame: pl.DataFrame, stage: str, test_seasons: list[int],
-                 min_train_games: int = 500) -> pl.DataFrame:
+                 min_train_games: int = 500, train_first_season: int | None = None) -> pl.DataFrame:
     """Predict each (season, week) in test_seasons using only earlier games.
 
-    Training set for week W of season S = every played game with season < S, plus games of
-    season S with week < W. Returns the test rows with a `p_home` column.
+    The training set for each test week is `training_set(frame, season, week)`.
+    Returns the test rows with a `p_home` column.
     """
     frame = frame.sort(["season", "week", "kickoff_utc"])
     weeks = (frame.filter(pl.col("season").is_in(test_seasons))
              .select("season", "week").unique().sort(["season", "week"]))
     preds = []
     for season, week in weeks.iter_rows():
-        train = frame.filter((pl.col("season") < season) | ((pl.col("season") == season) & (pl.col("week") < week)))
+        train = training_set(frame, season, week, train_first_season)
         test = frame.filter((pl.col("season") == season) & (pl.col("week") == week))
         if train.height < min_train_games:
             continue

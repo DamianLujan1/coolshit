@@ -16,7 +16,8 @@ DISCLAIMER = "Picks are analysis for entertainment only and are not betting advi
 
 def _env() -> Environment:
     env = Environment(loader=FileSystemLoader(config.TEMPLATES_DIR), autoescape=select_autoescape(["html"]))
-    env.globals.update(city=lambda a: config.TEAM_CITY.get(a, a), name=config.team_name, disclaimer=DISCLAIMER, version=__version__)
+    env.globals.update(city=lambda a: config.TEAM_CITY.get(a, a), name=config.team_name,
+                       train_first_season=config.TRAIN_FIRST_SEASON, disclaimer=DISCLAIMER, version=__version__)
     return env
 
 

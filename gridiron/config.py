@@ -27,6 +27,11 @@ FIRST_SEASON = 2015
 CURRENT_SEASON = 2026
 PRIOR_SEED_SEASON = FIRST_SEASON - 1
 SEASONS = list(range(FIRST_SEASON, CURRENT_SEASON + 1))
+# The model is fit only on games from this season onward. Earlier seasons still feed the
+# features (team priors, quarterback history) but are not training rows. Set to FIRST_SEASON
+# to train on everything. 2020 was chosen by the founder; see CHANGELOG 0.2.0 for the backtest
+# comparison (2020 was also the empty-stadium season, with home teams winning under half).
+TRAIN_FIRST_SEASON = 2020
 EVAL_SEASONS = [2023, 2024, 2025]
 
 # Franchise relocations. Play-by-play already uses the new codes for every

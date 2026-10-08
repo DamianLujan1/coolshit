@@ -1,6 +1,6 @@
 [project]
 name = "gridiron-model"
-version = "0.1.0"
+version = "0.2.0"
 description = "NFL game win probabilities with a public, timestamped record of every pick."
 readme = "README.md"
 requires-python = ">=3.11"

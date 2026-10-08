@@ -68,10 +68,26 @@ def test_walk_forward_trains_only_on_earlier_weeks(monkeypatch):
         return real_fit(train, stage)
 
     monkeypatch.setattr(models, "fit", spy)
-    out = models.walk_forward(frame, "stage1", [2015], min_train_games=2)
+    out = models.walk_forward(frame, "stage1", [2015], min_train_games=2, train_first_season=2015)
     # week 1 has nothing earlier to train on and is skipped; weeks 2-4 are predicted
     assert out.height == frame.filter((pl.col("season") == 2015) & (pl.col("week") > 1)).height
     weeks = sorted(out["week"].unique().to_list())
     assert weeks == [2, 3, 4]
     for (max_season, max_week, _), w in zip(seen, weeks):
         assert max_season == 2015 and max_week < w
+
+
+def test_training_set_respects_start_season_and_never_includes_target_week():
+    import polars as pl
+    from gridiron import config, models
+
+    frame = pl.DataFrame({
+        "season": [2018, 2019, 2020, 2021, 2026, 2026, 2026, 2026],
+        "week":   [5,    5,    5,    5,    3,    4,    5,    6],
+    })
+    got = models.training_set(frame, 2026, 5, train_first_season=2020)
+    assert got.select("season", "week").rows() == [(2020, 5), (2021, 5), (2026, 3), (2026, 4)]
+    # default start comes from config
+    default = models.training_set(frame, 2026, 5)
+    assert default["season"].min() == config.TRAIN_FIRST_SEASON
+    assert default.filter((pl.col("season") == 2026) & (pl.col("week") >= 5)).height == 0

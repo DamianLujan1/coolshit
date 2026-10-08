@@ -44,21 +44,21 @@ footer{border-top:1px solid var(--line);padding:16px 0;color:var(--muted);font-s
 <p>Betting lines. The closing spread and moneyline are used only to grade the model against the market, never as inputs. Nothing from after kickoff is ever used for that game: the feature pipeline has an automated test that scrambles every play from a game and all later games and checks that the game's inputs do not change.</p>
 
 <h3>The model itself</h3>
-<p>Stage one is a logistic regression on the differences between the two teams' numbers. Stage two is a gradient-boosted tree model on the same inputs, which only ships if it beats stage one on held-out seasons. Right now <strong>stage one</strong> ships.</p>
+<p>Stage one is a logistic regression on the differences between the two teams' numbers. Stage two is a gradient-boosted tree model on the same inputs, which only ships if it beats stage one on held-out seasons. Both learn only from games played since 2020; older seasons are used just to give teams and quarterbacks a starting rating. Right now <strong>stage one</strong> ships.</p>
 
 <h3>How it was tested</h3>
-<p>Walk-forward: for every week of the 2023, 2024 and 2025 seasons, the model is trained only on earlier seasons and earlier weeks of that season, then predicts that week. No peeking.</p>
+<p>Walk-forward: for every week of the 2023, 2024 and 2025 seasons, the model is trained only on earlier seasons (back to 2020) and earlier weeks of that season, then predicts that week. No peeking.</p>
 
 <table>
 <thead><tr><th>Who</th><th class="num">Games</th><th class="num">Accuracy</th><th class="num">Brier</th><th class="num">Log loss</th></tr></thead>
 <tbody>
 
 
-<tr><td>Stage 1 (logistic)</td><td class="num">854</td><td class="num">64.4%</td><td class="num">0.2194</td><td class="num">0.6280</td></tr>
+<tr><td>Stage 1 (logistic)</td><td class="num">854</td><td class="num">64.6%</td><td class="num">0.2224</td><td class="num">0.6351</td></tr>
 
 
 
-<tr><td>Stage 2 (boosted trees)</td><td class="num">854</td><td class="num">63.5%</td><td class="num">0.2252</td><td class="num">0.6420</td></tr>
+<tr><td>Stage 2 (boosted trees)</td><td class="num">854</td><td class="num">63.7%</td><td class="num">0.2284</td><td class="num">0.6502</td></tr>
 
 
 
@@ -76,7 +76,7 @@ footer{border-top:1px solid var(--line);padding:16px 0;color:var(--muted);font-s
 </tbody></table>
 
 
-<p><strong>The model does not beat the closing line.</strong> The market's vig-free probabilities scored 67.9% accuracy and 0.6077 log loss; the model scored 64.4% and 0.6280. That is the expected result for a model built on public data, and the running record on this site will show it either way. What the model does well is calibration: when it says 70%, the home team has won about 70% of the time.</p>
+<p><strong>The model does not beat the closing line.</strong> The market's vig-free probabilities scored 67.9% accuracy and 0.6077 log loss; the model scored 64.6% and 0.6351. That is the expected result for a model built on public data, and the running record on this site will show it either way. What the model does well is calibration: when it says 70%, the home team has won about 70% of the time.</p>
 
 <h3>Calibration</h3>
 <p class="muted small">Games are grouped by the model's predicted home-win probability. If the model is honest, the observed rate should track the predicted rate.</p>
@@ -84,25 +84,25 @@ footer{border-top:1px solid var(--line);padding:16px 0;color:var(--muted);font-s
 <thead><tr><th>Predicted</th><th class="num">Games</th><th class="num">Mean predicted</th><th class="num">Home actually won</th></tr></thead>
 <tbody>
 
-<tr><td>0.0-0.1</td><td class="num">1</td><td class="num">10%</td><td class="num">0%</td></tr>
+<tr><td>0.0-0.1</td><td class="num">2</td><td class="num">9%</td><td class="num">0%</td></tr>
 
-<tr><td>0.1-0.2</td><td class="num">22</td><td class="num">17%</td><td class="num">27%</td></tr>
+<tr><td>0.1-0.2</td><td class="num">24</td><td class="num">16%</td><td class="num">21%</td></tr>
 
-<tr><td>0.2-0.3</td><td class="num">55</td><td class="num">26%</td><td class="num">31%</td></tr>
+<tr><td>0.2-0.3</td><td class="num">77</td><td class="num">26%</td><td class="num">38%</td></tr>
 
-<tr><td>0.3-0.4</td><td class="num">123</td><td class="num">36%</td><td class="num">36%</td></tr>
+<tr><td>0.3-0.4</td><td class="num">119</td><td class="num">35%</td><td class="num">37%</td></tr>
 
-<tr><td>0.4-0.5</td><td class="num">132</td><td class="num">45%</td><td class="num">45%</td></tr>
+<tr><td>0.4-0.5</td><td class="num">151</td><td class="num">45%</td><td class="num">44%</td></tr>
 
-<tr><td>0.5-0.6</td><td class="num">164</td><td class="num">55%</td><td class="num">51%</td></tr>
+<tr><td>0.5-0.6</td><td class="num">150</td><td class="num">55%</td><td class="num">59%</td></tr>
 
-<tr><td>0.6-0.7</td><td class="num">164</td><td class="num">65%</td><td class="num">69%</td></tr>
+<tr><td>0.6-0.7</td><td class="num">149</td><td class="num">65%</td><td class="num">62%</td></tr>
 
-<tr><td>0.7-0.8</td><td class="num">123</td><td class="num">75%</td><td class="num">72%</td></tr>
+<tr><td>0.7-0.8</td><td class="num">113</td><td class="num">74%</td><td class="num">76%</td></tr>
 
-<tr><td>0.8-0.9</td><td class="num">62</td><td class="num">84%</td><td class="num">81%</td></tr>
+<tr><td>0.8-0.9</td><td class="num">60</td><td class="num">84%</td><td class="num">82%</td></tr>
 
-<tr><td>0.9-1.0</td><td class="num">8</td><td class="num">92%</td><td class="num">100%</td></tr>
+<tr><td>0.9-1.0</td><td class="num">9</td><td class="num">92%</td><td class="num">89%</td></tr>
 
 </tbody></table>
 
@@ -114,7 +114,7 @@ footer{border-top:1px solid var(--line);padding:16px 0;color:var(--muted);font-s
 </div></main>
 <footer><div class="wrap">
 <p>Picks are analysis for entertainment only and are not betting advice.</p>
-<p>Data from <a href="https://github.com/nflverse" rel="noopener">nflverse</a> (CC BY 4.0), loaded with nflreadpy. Team names are city names and standard abbreviations only. This site is not affiliated with or endorsed by the NFL or any team. Model v0.1.0, generated 2026-10-07 21:46 UTC.</p>
+<p>Data from <a href="https://github.com/nflverse" rel="noopener">nflverse</a> (CC BY 4.0), loaded with nflreadpy. Team names are city names and standard abbreviations only. This site is not affiliated with or endorsed by the NFL or any team. Model v0.2.0, generated 2026-10-08 16:07 UTC.</p>
 </div></footer>
 </body>
 </html>

@@ -93,7 +93,7 @@ def _stage_choice() -> str:
 def _train_and_pick(feats: pl.DataFrame, season: int, week: int, now: dt.datetime, stage: str | None = None):
     stage = stage or _stage_choice()
     frame = features.modeling_frame(feats)
-    train = frame.filter((pl.col("season") < season) | ((pl.col("season") == season) & (pl.col("week") < week)))
+    train = models.training_set(frame, season, week)
     model = models.fit(train, stage)
     target = feats.filter((pl.col("season") == season) & (pl.col("week") == week)
                           & pl.col("result").is_null() & (pl.col("kickoff_utc") > now))

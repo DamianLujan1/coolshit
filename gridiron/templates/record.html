@@ -1,0 +1,45 @@
+{% extends "base.html" %}
+{% block title %}Record | Gridiron Model{% endblock %}
+{% block body %}
+<h2>Running record vs. the baselines</h2>
+<p class="muted">Graded on the same games the model picked. Baselines are graded on the closing line from the nflverse schedules file. Brier score is the average squared error of the published probability; lower is better, 0.25 is a coin flip.</p>
+{% macro rec_table(block) -%}
+<table>
+<thead><tr><th>Who</th><th class="num">W</th><th class="num">L</th><th class="num">Push</th><th class="num">Win %</th><th class="num">Brier</th></tr></thead>
+<tbody>
+{% for key, label in labels.items() %}
+<tr><td>{{ label }}</td><td class="num">{{ block[key].wins }}</td><td class="num">{{ block[key].losses }}</td><td class="num">{{ block[key].pushes }}</td>
+<td class="num">{% if block[key].pct is not none %}{{ '%.1f'|format(block[key].pct * 100) }}%{% endif %}</td>
+<td class="num">{{ block[key].brier if block[key].brier is defined else '' }}</td></tr>
+{% endfor %}
+</tbody></table>
+{%- endmacro %}
+{% if record.n_graded %}
+<h3>All graded picks ({{ record.n_graded }} games)</h3>
+{{ rec_table(record.overall) }}
+{% for season, block in record.seasons.items() %}
+<h3>{{ season }} season</h3>
+{{ rec_table(block) }}
+{% endfor %}
+<h3>Week by week</h3>
+<table>
+<thead><tr><th>Season</th><th>Week</th><th class="num">Model</th><th class="num">Home</th><th class="num">Spread fav</th><th class="num">ML fav</th></tr></thead>
+<tbody>
+{% for w in record.weeks|reverse %}
+<tr><td>{{ w.season }}</td><td>{{ w.week }}</td><td class="num">{{ w.model.wins }}-{{ w.model.losses }}</td><td class="num">{{ w.home.wins }}-{{ w.home.losses }}</td><td class="num">{{ w.spread.wins }}-{{ w.spread.losses }}</td><td class="num">{{ w.market.wins }}-{{ w.market.losses }}</td></tr>
+{% endfor %}
+</tbody></table>
+<h3>Recent graded picks</h3>
+<table>
+<thead><tr><th>Week</th><th>Game</th><th>Pick</th><th class="num">Prob</th><th>Result</th></tr></thead>
+<tbody>
+{% for r in recent %}
+<tr><td>{{ r.season }} wk {{ r.week }}</td><td>{{ r.score }}</td><td>{{ name(r.pick) }}</td><td class="num">{{ r.pick_pct }}</td>
+<td>{% if r.model_hit == 1 %}<span class="hit">hit</span>{% elif r.model_hit == 0 %}<span class="miss">miss</span>{% else %}push{% endif %}</td></tr>
+{% endfor %}
+</tbody></table>
+{% else %}
+<p>No graded picks yet. The first picks were logged for week {{ week }} of {{ season }}; they get graded once the games are final.</p>
+{% endif %}
+<p class="small muted">The full pick log, with pre-kickoff timestamps, is <a href="/picks.csv">picks.csv</a>. The record as data is <a href="/record.json">record.json</a>.</p>
+{% endblock %}

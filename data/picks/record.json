@@ -1,0 +1,38 @@
+{
+  "overall": {
+    "model": {
+      "wins": 0,
+      "losses": 0,
+      "pushes": 0,
+      "pct": null
+    },
+    "home": {
+      "wins": 0,
+      "losses": 0,
+      "pushes": 0,
+      "pct": null
+    },
+    "spread": {
+      "wins": 0,
+      "losses": 0,
+      "pushes": 0,
+      "pct": null
+    },
+    "market": {
+      "wins": 0,
+      "losses": 0,
+      "pushes": 0,
+      "pct": null
+    }
+  },
+  "seasons": {},
+  "weeks": [],
+  "n_graded": 0,
+  "n_pending": 15,
+  "labels": {
+    "model": "Gridiron model",
+    "home": "Always home",
+    "spread": "Closing-spread favorite",
+    "market": "Moneyline favorite"
+  }
+}

@@ -1,0 +1,50 @@
+{% extends "base.html" %}
+{% block title %}How it works | Gridiron Model{% endblock %}
+{% block body %}
+<h2>How the model works</h2>
+<p>The model answers one question for every game: how likely is the home team to win? It does that from how well each team has actually played, not from what anyone thinks of them.</p>
+
+<h3>What goes in</h3>
+<p>Every play in the NFL has an expected points value before and after the snap. The difference, expected points added or EPA, measures how much a play helped or hurt. We total that up per team and per game, split into passing and rushing, on offense and on defense. We also track success rate (the share of plays that keep an offense on schedule) and how efficient a team is on first and second down.</p>
+<p>Recent games count more than old ones. Each number is a weighted average of the team's earlier games this season, where every game back in time counts about 15% less. In September there is not much to go on, so the average starts from last season's number, pulled halfway toward league average. By mid-season the current year dominates.</p>
+<p>On top of team strength: home field, days of rest for each side, whether either team is coming off a bye, whether it is a division game, and the starting quarterback's recent EPA per dropback. When a starter changes, the new quarterback brings his own history, and a quarterback with little history is treated as roughly replacement level until he proves otherwise.</p>
+
+<h3>What never goes in</h3>
+<p>Betting lines. The closing spread and moneyline are used only to grade the model against the market, never as inputs. Nothing from after kickoff is ever used for that game: the feature pipeline has an automated test that scrambles every play from a game and all later games and checks that the game's inputs do not change.</p>
+
+<h3>The model itself</h3>
+<p>Stage one is a logistic regression on the differences between the two teams' numbers. Stage two is a gradient-boosted tree model on the same inputs, which only ships if it beats stage one on held-out seasons.{% if backtest %} Right now <strong>{{ 'stage two' if backtest.stage_choice == 'stage2' else 'stage one' }}</strong> ships.{% endif %}</p>
+
+<h3>How it was tested</h3>
+<p>Walk-forward: for every week of the 2023, 2024 and 2025 seasons, the model is trained only on earlier seasons and earlier weeks of that season, then predicts that week. No peeking.</p>
+{% if backtest %}
+<table>
+<thead><tr><th>Who</th><th class="num">Games</th><th class="num">Accuracy</th><th class="num">Brier</th><th class="num">Log loss</th></tr></thead>
+<tbody>
+{% for key, name in [('stage1','Stage 1 (logistic)'),('stage2','Stage 2 (boosted trees)'),('p_base_home','Always pick home'),('p_base_spread','Closing-spread favorite'),('p_base_market','Market moneyline, vig removed')] %}
+{% if key in backtest.combined %}
+<tr><td>{{ name }}</td><td class="num">{{ backtest.combined[key].n }}</td><td class="num">{{ '%.1f'|format(backtest.combined[key].accuracy * 100) }}%</td><td class="num">{{ '%.4f'|format(backtest.combined[key].brier) }}</td><td class="num">{{ '%.4f'|format(backtest.combined[key].log_loss) }}</td></tr>
+{% endif %}
+{% endfor %}
+</tbody></table>
+{% set m = backtest.combined[backtest.stage_choice] %}{% set mk = backtest.combined['p_base_market'] %}
+{% if m.log_loss < mk.log_loss and m.accuracy > mk.accuracy %}
+<p>Over those three seasons the model beat the market on both accuracy and log loss. Be suspicious of that until it holds on live picks.</p>
+{% else %}
+<p><strong>The model does not beat the closing line.</strong> The market's vig-free probabilities scored {{ '%.1f'|format(mk.accuracy * 100) }}% accuracy and {{ '%.4f'|format(mk.log_loss) }} log loss; the model scored {{ '%.1f'|format(m.accuracy * 100) }}% and {{ '%.4f'|format(m.log_loss) }}. That is the expected result for a model built on public data, and the running record on this site will show it either way. What the model does well is calibration: when it says 70%, the home team has won about 70% of the time.</p>
+{% endif %}
+<h3>Calibration</h3>
+<p class="muted small">Games are grouped by the model's predicted home-win probability. If the model is honest, the observed rate should track the predicted rate.</p>
+<table>
+<thead><tr><th>Predicted</th><th class="num">Games</th><th class="num">Mean predicted</th><th class="num">Home actually won</th></tr></thead>
+<tbody>
+{% for r in backtest.calibration[backtest.stage_choice] if r.n %}
+<tr><td>{{ r.bin }}</td><td class="num">{{ r.n }}</td><td class="num">{{ '%.0f'|format(r.mean_pred * 100) }}%</td><td class="num">{{ '%.0f'|format(r.observed * 100) }}%</td></tr>
+{% endfor %}
+</tbody></table>
+{% endif %}
+
+<h3>Data and attribution</h3>
+<p>All data comes from the <a href="https://github.com/nflverse" rel="noopener">nflverse</a> project (play-by-play, schedules, scores and closing lines), released under <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC BY 4.0</a>, and is loaded with the nflreadpy package. FTN charting data is not used. The code is open; the pick log is append-only and committed to git with a pre-kickoff timestamp on every row.</p>
+<p>Team names on this site are city names and standard abbreviations. No league or team logos, wordmarks or trademarks are used, and this site is not affiliated with the NFL.</p>
+{% endblock %}

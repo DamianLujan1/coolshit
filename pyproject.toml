@@ -1,0 +1,38 @@
+[project]
+name = "gridiron-model"
+version = "0.1.0"
+description = "NFL game win probabilities with a public, timestamped record of every pick."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { text = "MIT" }
+dependencies = [
+    "nflreadpy==0.1.5",
+    "polars==2.0.0",
+    "numpy==2.5.3",
+    "scipy==1.18.1",
+    "scikit-learn==1.9.1",
+    "lightgbm==4.7.0",
+    "jinja2==3.1.6",
+    "pyarrow==25.0.1",
+]
+
+[project.optional-dependencies]
+dev = ["pytest==9.1.1"]
+
+[project.scripts]
+gridiron = "gridiron.cli:main"
+
+[build-system]
+requires = ["setuptools>=68"]
+build-backend = "setuptools.build_meta"
+
+[tool.setuptools]
+packages = ["gridiron"]
+include-package-data = true
+
+[tool.setuptools.package-data]
+gridiron = ["templates/*.html"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = "-q"

@@ -1,0 +1,36 @@
+{% extends "base.html" %}
+{% block title %}Week {{ week }} picks, {{ season }} | Gridiron Model{% endblock %}
+{% block body %}
+{% if picks %}
+<h2>Week {{ week }}, {{ season }} season</h2>
+<p class="muted">Win probabilities from the model. Every pick below was logged with a timestamp before kickoff and committed to a public git history. Nothing is edited after the fact.</p>
+<table>
+<thead><tr><th>Kickoff</th><th>Game</th><th>Pick</th><th class="num">Win prob</th><th>Confidence</th></tr></thead>
+<tbody>
+{% for p in picks %}
+<tr>
+<td class="small">{{ p.kickoff_local }}</td>
+<td>{{ city(p.away_team) }} ({{ p.away_team }}) at {{ city(p.home_team) }} ({{ p.home_team }})</td>
+<td><strong>{{ name(p.pick) }}</strong></td>
+<td class="num">{{ p.pick_pct }}</td>
+<td><span class="tag {{ p.confidence }}">{{ p.confidence }}</span></td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+<p class="small muted">Confidence labels: strong is 75% or higher, confident is 65 to 75%, lean is 55 to 65%, coin flip is under 55%. A coin flip still gets a side because the record demands it.</p>
+{% else %}
+<h2>No picks posted yet</h2>
+<p>Picks go up every Tuesday night during the season.</p>
+{% endif %}
+{% if record.n_graded %}
+<div class="card">
+<strong>Running record:</strong>
+model {{ record.overall.model.wins }}-{{ record.overall.model.losses }}{% if record.overall.model.pushes %}-{{ record.overall.model.pushes }}{% endif %}
+&middot; always home {{ record.overall.home.wins }}-{{ record.overall.home.losses }}
+&middot; spread favorite {{ record.overall.spread.wins }}-{{ record.overall.spread.losses }}
+&middot; moneyline favorite {{ record.overall.market.wins }}-{{ record.overall.market.losses }}
+&nbsp;<a href="/record">details</a>
+</div>
+{% endif %}
+{% endblock %}

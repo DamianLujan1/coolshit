@@ -122,16 +122,21 @@ def test_live_boosting_override_cannot_bypass_selection(monkeypatch):
 
 @pytest.fixture
 def publication_stub(output_tree, monkeypatch):
+    """No live HTTP or CLI: verify orchestration against exact fixture bytes."""
     link = output_tree / ".vercel/project.json"
     link.parent.mkdir()
     link.write_text(json.dumps({"projectId": cli.VERCEL_PROJECT_ID, "orgId": cli.VERCEL_ORG_ID}))
-    calls = []
-    state = {"staged": False, "fail": None, "wrong_proof": False}
+    (config.SITE_DIR / "methodology.html").write_bytes(b"<html>nflverse methodology fixture</html>\n")
+    monkeypatch.setenv("VERCEL_TOKEN", "unit-test-token-not-real")
+    calls, events, requests = [], [], []
+    state = {"staged": False, "fail": None, "mismatch": None, "protected": False}
+
     def run(cmd, **kwargs):
         calls.append(cmd)
         command = cmd[1:]
-        if state["fail"] and command[0] == state["fail"]:
-            raise subprocess.CalledProcessError(1, cmd)
+        events.append(command[0])
+        if state["fail"] == command[0]:
+            raise subprocess.CalledProcessError(1, cmd, output="fixture failure", stderr="fixture failure")
         text = ""
         if cmd[0] == cli.GIT:
             if command == ["diff", "--cached", "--name-only"]:
@@ -149,59 +154,258 @@ def publication_stub(output_tree, monkeypatch):
             elif command[0] == "commit":
                 state["staged"] = False
         else:
+            assert command[0] in {"--version", "project", "whoami", "deploy", "inspect", "promote"}
             assert kwargs["env"]["VERCEL_PROJECT_ID"] == cli.VERCEL_PROJECT_ID
             assert kwargs["env"]["VERCEL_ORG_ID"] == cli.VERCEL_ORG_ID
-            if command[:2] == ["project", "inspect"]:
+            if command[0] == "--version":
+                text = "63.1.0\n"
+            elif command[:2] == ["project", "inspect"]:
                 text = cli.VERCEL_PROJECT_ID
             elif command[0] == "deploy":
                 assert "--skip-domain" in command
                 assert "sourceCommit=" + "a" * 40 in command
+                assert command[command.index("--project") + 1] == cli.VERCEL_PROJECT_ID
                 text = "https://verified-deployment.vercel.app\n"
             elif command[0] == "inspect":
                 text = "status Ready\n"
-            elif command[:2] == ["curl", "/picks.csv"]:
-                text = "wrong" if state["wrong_proof"] else config.PICKS_FILE.read_text()
-            elif command[:2] == ["curl", "/methodology"]:
-                text = "nflverse attribution"
         return subprocess.CompletedProcess(cmd, 0, text, "")
+
+    def public_get(url):
+        requests.append(url)
+        production = url.startswith("https://gridiron-model.vercel.app/")
+        events.append("public_production" if production else "public_preview")
+        if state["protected"] and not production:
+            raise cli.ProtectedPreviewError("fixture protected preview")
+        if state["mismatch"] == "production" and production:
+            return b"stale production"
+        if url.endswith("/picks.csv"):
+            return b"wrong proof" if state["mismatch"] == "picks" else config.PICKS_FILE.read_bytes()
+        if url.endswith("/methodology"):
+            return b"wrong methodology" if state["mismatch"] == "methodology" else (config.SITE_DIR / "methodology.html").read_bytes()
+        pytest.fail("unexpected public verification route")
+
     monkeypatch.setattr(cli.subprocess, "run", run)
-    return calls, state
+    monkeypatch.setattr(cli, "_public_get", public_get)
+    return calls, state, events, requests
 
 
-def test_publication_subprocess_order_and_target(publication_stub):
-    calls, state = publication_stub
+def test_publication_order_target_and_public_verification(publication_stub):
+    calls, state, events, requests = publication_stub
     args = SimpleNamespace(publish_branch="main", remote="origin")
     cli._publication_preflight(args)
     cli._git_commit("weekly artifacts")
     cli._publish(args)
-    operations = [cmd[1] for cmd in calls]
-    assert operations.index("commit") < operations.index("push") < operations.index("deploy") < operations.index("curl") < operations.index("promote")
+    assert events.index("commit") < events.index("push") < events.index("deploy") < events.index("public_preview") < events.index("promote") < events.index("public_production")
     assert [cli.GIT, "push", "origin", "HEAD:refs/heads/main"] in calls
+    assert len(requests) == 4
+    report = json.loads(cli._publication_verification_path().read_text())
+    assert report["status"] == "public_production_verified"
+    assert report["preview_http_verified"] and report["production_http_verified"]
+    assert report["credential_or_protection_changes"] is False
 
 
-@pytest.mark.parametrize("failure", ["push", "deploy", "inspect", "curl"])
+@pytest.mark.parametrize("failure", ["push", "deploy", "inspect"])
 def test_publication_stops_after_failed_step(publication_stub, failure):
-    calls, state = publication_stub
+    calls, state, events, requests = publication_stub
     state["fail"] = failure
-    with pytest.raises(subprocess.CalledProcessError):
+    with pytest.raises((subprocess.CalledProcessError, RuntimeError)):
         cli._publish(SimpleNamespace(publish_branch="main", remote="origin"))
-    operations = [cmd[1] for cmd in calls]
-    assert "promote" not in operations
+    assert "promote" not in events
     if failure == "push":
-        assert "deploy" not in operations
+        assert "deploy" not in events
 
 
-def test_wrong_uploaded_proof_never_promotes(publication_stub):
-    calls, state = publication_stub
-    state["wrong_proof"] = True
-    with pytest.raises(RuntimeError, match="verification failed"):
+@pytest.mark.parametrize("mismatch", ["picks", "methodology"])
+def test_mismatched_public_content_never_promotes(publication_stub, mismatch):
+    calls, state, events, requests = publication_stub
+    state["mismatch"] = mismatch
+    with pytest.raises(RuntimeError):
         cli._publish(SimpleNamespace(publish_branch="main", remote="origin"))
-    assert "promote" not in [cmd[1] for cmd in calls]
+    assert "promote" not in events
+    assert json.loads(cli._publication_verification_path().read_text())["status"] == "preview_verification_failed"
+
+
+def test_protected_preview_records_unverified_without_auth_fallback(publication_stub):
+    calls, state, events, requests = publication_stub
+    state["protected"] = True
+    with pytest.raises(RuntimeError):
+        cli._publish(SimpleNamespace(publish_branch="main", remote="origin"))
+    assert "promote" not in events and "public_production" not in events
+    assert not any(cmd[1] in {"curl", "security", "login", "logout", "token", "tokens", "api"} for cmd in calls)
+    report = json.loads(cli._publication_verification_path().read_text())
+    assert report["status"] == "protected_unverified"
+    assert not report["preview_http_verified"] and not report["production_http_verified"]
+    assert report["credential_or_protection_changes"] is False
+
+
+def test_stale_production_never_claims_verified_publication(publication_stub, capsys):
+    calls, state, events, requests = publication_stub
+    state["mismatch"] = "production"
+    with pytest.raises(RuntimeError):
+        cli._publish(SimpleNamespace(publish_branch="main", remote="origin"))
+    assert "promote" in events
+    assert "published Git commit" not in capsys.readouterr().out
+    assert json.loads(cli._publication_verification_path().read_text())["status"] == "production_unverified"
+
+
+def test_public_verification_is_byte_exact_including_line_endings(publication_stub, monkeypatch):
+    expected = config.PICKS_FILE.read_bytes()
+    assert b"\n" in expected
+    monkeypatch.setattr(cli, "_public_get", lambda url: expected.replace(b"\n", b"\r\n"))
+    with pytest.raises(RuntimeError, match="verification failed"):
+        cli._verify_public_deployment("https://verified-deployment.vercel.app")
 
 
 def test_unlinked_project_blocks_before_mutation(publication_stub):
-    calls, state = publication_stub
+    calls, state, events, requests = publication_stub
     (config.ROOT / ".vercel/project.json").unlink()
     with pytest.raises(RuntimeError, match="not linked"):
         cli._publication_preflight(SimpleNamespace(publish_branch="main", remote="origin"))
     assert not any(cmd[1] in {"add", "commit", "push", "deploy", "promote"} for cmd in calls)
+
+
+@pytest.mark.parametrize("arguments", [
+    (), ("curl", "/picks.csv"), ("security", "disable"), ("login",), ("logout",),
+    ("token", "create"), ("tokens", "create"), ("refresh",), ("api", "/v9/projects"),
+    ("project", "update"), ("teams", "switch", "other"), ("link",),
+    ("deploy", "--debug"), ("deploy", "--token", "override-token"),
+    ("deploy", "--global-config", "/tmp/stored-auth"), ("deploy", "--scope", "other-scope"),
+])
+def test_vercel_rejects_unsafe_commands_before_subprocess(monkeypatch, arguments):
+    monkeypatch.setenv("VERCEL_TOKEN", "unit-test-token-not-real")
+    monkeypatch.setattr(cli.subprocess, "run", lambda *a, **kw: pytest.fail("unsafe CLI command ran"))
+    with pytest.raises(RuntimeError):
+        cli._vercel(*arguments)
+
+
+def test_missing_token_never_uses_stored_auth_or_runs_cli(monkeypatch):
+    monkeypatch.delenv("VERCEL_TOKEN", raising=False)
+    monkeypatch.setattr(cli.subprocess, "run", lambda *a, **kw: pytest.fail("missing-token CLI ran"))
+    with pytest.raises(RuntimeError):
+        cli._vercel("project", "inspect")
+
+
+def test_cli_auth_is_isolated_without_debug_or_proxy_environment(monkeypatch):
+    token = "unit-test-token-not-real"
+    monkeypatch.setenv("VERCEL_TOKEN", token)
+    dangerous = ("VERCEL_DEBUG", "DEBUG", "NODE_DEBUG", "NODE_OPTIONS", "VERCEL_AUTOMATION_BYPASS_SECRET", "HTTPS_PROXY", "ALL_PROXY")
+    for key in dangerous:
+        monkeypatch.setenv(key, "unsafe-ambient-fixture")
+    paths = []
+    def run(cmd, **kwargs):
+        assert "--non-interactive" in cmd and "--debug" not in cmd
+        assert token not in " ".join(cmd)
+        folder = Path(cmd[cmd.index("--global-config") + 1])
+        paths.append(folder)
+        assert folder.is_dir() and not list(folder.rglob("auth.json"))
+        env = kwargs["env"]
+        assert env["VERCEL_TOKEN"] == token
+        assert env["CI"] == env["VERCEL_TELEMETRY_DISABLED"] == env["NO_UPDATE_NOTIFIER"] == "1"
+        assert all(env.get(key) != "unsafe-ambient-fixture" for key in dangerous)
+        assert kwargs.get("stdin") == subprocess.DEVNULL
+        text = "63.1.0\n" if cmd[1] == "--version" else "fixture-user\n"
+        return subprocess.CompletedProcess(cmd, 0, text, "")
+    monkeypatch.setattr(cli.subprocess, "run", run)
+    cli._vercel("whoami", "--format", "json")
+    assert paths and all(not path.exists() for path in paths)
+
+
+def test_unreviewed_cli_version_cannot_run_authenticated_commands(monkeypatch):
+    monkeypatch.setenv("VERCEL_TOKEN", "unit-test-token-not-real")
+    calls = []
+    def run(cmd, **kwargs):
+        calls.append(cmd)
+        return subprocess.CompletedProcess(cmd, 0, "99.0.0\n", "")
+    monkeypatch.setattr(cli.subprocess, "run", run)
+    with pytest.raises(RuntimeError):
+        cli._vercel("project", "inspect")
+    assert len(calls) == 1 and calls[0][1] == "--version"
+
+
+def test_cli_failure_and_traceback_never_expose_credentials(monkeypatch, capsys):
+    import traceback
+    token = "unit-test-token-not-real"
+    monkeypatch.setenv("VERCEL_TOKEN", token)
+    def run(cmd, **kwargs):
+        if cmd[1] == "--version":
+            return subprocess.CompletedProcess(cmd, 0, "63.1.0\n", "")
+        raise subprocess.CalledProcessError(1, cmd, output=f"token={token}", stderr=f"Authorization: Bearer {token}")
+    monkeypatch.setattr(cli.subprocess, "run", run)
+    with pytest.raises(RuntimeError) as exc:
+        cli._vercel("whoami", "--format", "json")
+    assert token not in "".join(traceback.format_exception(exc.value))
+    assert token not in str(exc.value)
+    captured = capsys.readouterr()
+    assert token not in captured.out + captured.err
+
+
+def test_successful_cli_output_is_redacted_before_return(monkeypatch):
+    token = "unit-test-token-not-real"
+    monkeypatch.setenv("VERCEL_TOKEN", token)
+    def run(cmd, **kwargs):
+        if cmd[1] == "--version":
+            return subprocess.CompletedProcess(cmd, 0, "63.1.0\n", "")
+        return subprocess.CompletedProcess(cmd, 0, f"fixture-user {token}", f"fixture-warning {token}")
+    monkeypatch.setattr(cli.subprocess, "run", run)
+    result = cli._vercel("whoami", "--format", "json")
+    assert token not in result.stdout + result.stderr
+
+
+def test_public_get_has_no_proxy_auth_cookie_or_bypass_context(monkeypatch):
+    import urllib.request
+    monkeypatch.setenv("HTTPS_PROXY", "http://proxy.invalid:8080")
+    monkeypatch.setenv("VERCEL_TOKEN", "unit-test-token-not-real")
+    monkeypatch.setenv("VERCEL_AUTOMATION_BYPASS_SECRET", "fixture-bypass-secret")
+    seen = {}
+    def build_opener(*handlers):
+        seen["handlers"] = handlers
+        class Response:
+            def read(self, *args):
+                return b"public bytes"
+            def __enter__(self):
+                return self
+            def __exit__(self, *args):
+                return False
+        class Opener:
+            def open(self, request, *args, **kwargs):
+                seen["request"] = request
+                return Response()
+        return Opener()
+    monkeypatch.setattr(urllib.request, "build_opener", build_opener)
+    assert cli._public_get("https://verified-deployment.vercel.app/picks.csv") == b"public bytes"
+    handlers = seen["handlers"]
+    assert any(isinstance(h, urllib.request.ProxyHandler) and h.proxies == {} for h in handlers)
+    assert not any(isinstance(h, (urllib.request.HTTPBasicAuthHandler, urllib.request.HTTPDigestAuthHandler, urllib.request.HTTPCookieProcessor)) for h in handlers)
+    redirect = next(h for h in handlers if isinstance(h, urllib.request.HTTPRedirectHandler))
+    assert redirect.redirect_request(seen["request"], None, 302, "redirect", {}, "https://vercel.com/login") is None
+    request = seen["request"]
+    assert request.full_url == "https://verified-deployment.vercel.app/picks.csv"
+    headers = {name.lower(): value for name, value in request.header_items()}
+    assert not set(headers) & {"authorization", "proxy-authorization", "cookie", "x-vercel-protection-bypass"}
+    assert "unit-test-token-not-real" not in str(headers) and "fixture-bypass-secret" not in str(headers)
+
+
+@pytest.mark.parametrize("code", [401, 403, 301, 302, 303, 307, 308])
+def test_protection_or_auth_redirect_is_unverified(monkeypatch, code):
+    import urllib.error
+    import urllib.request
+    def build_opener(*handlers):
+        class Opener:
+            def open(self, request, *args, **kwargs):
+                raise urllib.error.HTTPError(request.full_url, code, "protected fixture", {"Location": "https://vercel.com/login"}, None)
+        return Opener()
+    monkeypatch.setattr(urllib.request, "build_opener", build_opener)
+    with pytest.raises(cli.ProtectedPreviewError):
+        cli._public_get("https://verified-deployment.vercel.app/picks.csv")
+
+
+@pytest.mark.parametrize("url", [
+    "http://verified-deployment.vercel.app/picks.csv",
+    "https://user:secret@verified-deployment.vercel.app/picks.csv",
+    "https://verified-deployment.vercel.app/picks.csv?x-vercel-protection-bypass=secret",
+])
+def test_public_get_rejects_authenticated_or_non_https_urls_without_network(monkeypatch, url):
+    import urllib.request
+    monkeypatch.setattr(urllib.request, "build_opener", lambda *a, **kw: pytest.fail("unsafe URL attempted network"))
+    with pytest.raises((RuntimeError, ValueError)):
+        cli._public_get(url)

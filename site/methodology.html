@@ -47,6 +47,7 @@ footer{border-top:1px solid var(--line);padding:16px 0;color:var(--muted);font-s
 <p>Stage one is a logistic regression on the differences between the two teams' numbers. Stage two is a gradient-boosted tree model on the same inputs, which can ship only if it beats stage one on both Brier score and log loss in the 2022 selection season. Right now <strong>stage one</strong> ships.</p>
 
 <h3>How it was tested</h3>
+<p><a href="/backtest.md">Read the complete backtest</a>, including each season, every baseline and ten-bin calibration.</p>
 <p>The model choice is made using 2022 alone. Its settings are then frozen for a 2023–2025 audit: each week is predicted from earlier weeks whose games were completed before the prediction cutoff. Both models are reported even when the simpler model is selected. Probabilities describe the chance of winning conditional on a decisive result. Ties are excluded from binary win-probability training and backtest scores; live ties remain visible as pushes in the record.</p>
 
 <table>
@@ -119,7 +120,7 @@ footer{border-top:1px solid var(--line);padding:16px 0;color:var(--muted);font-s
 </div></main>
 <footer><div class="wrap">
 <p>Picks are analysis for entertainment only and are not betting advice.</p>
-<p>Data from <a href="https://github.com/nflverse" rel="noopener">nflverse</a> (CC BY 4.0), loaded with nflreadpy. Team names are city names and standard abbreviations only. This site is not affiliated with or endorsed by the NFL or any team. Model v0.1.1, generated 2026-10-09 01:28 UTC.</p>
+<p>Data from <a href="https://github.com/nflverse" rel="noopener">nflverse</a> (CC BY 4.0), loaded with nflreadpy. Team names are city names and standard abbreviations only. This site is not affiliated with or endorsed by the NFL or any team. Model v0.1.1, generated 2026-10-09 01:42 UTC.</p>
 </div></footer>
 </body>
 </html>

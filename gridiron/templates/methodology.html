@@ -16,6 +16,7 @@
 <p>Stage one is a logistic regression on the differences between the two teams' numbers. Stage two is a gradient-boosted tree model on the same inputs, which can ship only if it beats stage one on both Brier score and log loss in the 2022 selection season.{% if backtest %} Right now <strong>{{ 'stage two' if backtest.stage_choice == 'stage2' else 'stage one' }}</strong> ships.{% endif %}</p>
 
 <h3>How it was tested</h3>
+<p><a href="/backtest.md">Read the complete backtest</a>, including each season, every baseline and ten-bin calibration.</p>
 <p>The model choice is made using 2022 alone. Its settings are then frozen for a 2023–2025 audit: each week is predicted from earlier weeks whose games were completed before the prediction cutoff. Both models are reported even when the simpler model is selected. Probabilities describe the chance of winning conditional on a decisive result. Ties are excluded from binary win-probability training and backtest scores; live ties remain visible as pushes in the record.</p>
 {% if backtest %}
 <table>

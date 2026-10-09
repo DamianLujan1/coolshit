@@ -58,6 +58,8 @@ def build_site(season: int | None, week: int | None, picks_this_week: pl.DataFra
     (config.SITE_DIR / "record.json").write_text(json.dumps(record, indent=2))
     # so `vercel deploy site` serves /record and /methodology without .html
     (config.SITE_DIR / "vercel.json").write_text(json.dumps({"cleanUrls": True, "trailingSlash": False}, indent=2) + "\n")
+    if config.BACKTEST_MD.exists():
+        shutil.copy(config.BACKTEST_MD, config.SITE_DIR / "backtest.md")
     if config.PICKS_FILE.exists():
         shutil.copy(config.PICKS_FILE, config.SITE_DIR / "picks.csv")
 

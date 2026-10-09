@@ -3,6 +3,12 @@
 All notable changes to Gridiron Model. The pick log in `data/picks/picks.csv` is append-only and is not
 covered here; its git history is the record.
 
+## Publication verification correction - 2026-10-09
+
+- Remove `vercel curl` from publication. Verify public assets as raw bytes over unauthenticated HTTPS, without proxies, cookies, auth headers, redirects or bypass tokens. Protected previews are explicitly recorded unverified and stop CLI promotion.
+- Require an existing explicit token, pin reviewed CLI 63.1.0, isolate global configuration, disable refresh/login/update paths, reject anonymous credential state, and allowlist publication commands. Sanitize command failures.
+- Add publication-side-effect regression tests and expose the full backtest as a public static asset. Model formulas, audit results and all issued picks remain unchanged.
+
 ## 0.1.1 - 2026-10-09 (local repair; unpublished)
 
 - Remove target-game PBP and unversioned schedule starter IDs from QB resolution. Use captured pre-prediction evidence or the lagged completed-game dominant passer/replacement prior; preserve source, observation and prediction timestamps for new picks.

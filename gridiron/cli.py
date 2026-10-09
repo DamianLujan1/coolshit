@@ -12,6 +12,10 @@ import re
 import shutil
 import subprocess
 import sys
+import tempfile
+import urllib.error
+import urllib.parse
+import urllib.request
 from contextlib import contextmanager
 
 import numpy as np
@@ -371,6 +375,8 @@ def _assert_clean_index() -> None:
 
 
 def _publication_preflight(args) -> None:
+    if (config.ROOT / ".vercel" / "anonymous.json").exists():
+        raise RuntimeError("publication refuses anonymous deployment credentials; no credential state was changed")
     _assert_clean_index()
     if _git("status", "--porcelain").stdout.strip():
         raise RuntimeError("publication requires a clean reviewed checkout before generating weekly artifacts")
@@ -396,11 +402,116 @@ def _publication_preflight(args) -> None:
 
 
 def _vercel(*arguments: str):
-    # Exact per-process IDs override ambient CLI targeting without changing any
-    # user's credentials or persistent project/access settings.
-    env = {**os.environ, "VERCEL_PROJECT_ID": VERCEL_PROJECT_ID, "VERCEL_ORG_ID": VERCEL_ORG_ID}
-    return subprocess.run(["vercel", *arguments, "--scope", VERCEL_SCOPE, "--non-interactive", "--no-color"], check=True,
-                          capture_output=True, text=True, cwd=config.ROOT, env=env)
+    """Use only an explicitly supplied existing token; never saved OAuth state.
+
+    Vercel 63.1.0 treats VERCEL_TOKEN as explicit-token auth and does not load
+    the saved refresh token. An empty isolated global config is a second guard.
+    No command here can provision bypass access, log in, or alter protection.
+    """
+    safe = arguments in {("project", "inspect"), ("whoami", "--format", "json")}
+    if len(arguments) == 6 and arguments[:5] == ("deploy", "--prod", "--skip-domain", "--yes", "--meta"):
+        safe = bool(re.fullmatch(r"sourceCommit=[0-9a-f]{40}", arguments[5]))
+    if len(arguments) == 5 and arguments[0] == "inspect" and arguments[2:] == ("--wait", "--timeout", "60s"):
+        safe = _is_vercel_url(arguments[1])
+    if len(arguments) == 3 and arguments[0] == "promote" and arguments[2] == "--yes":
+        safe = _is_vercel_url(arguments[1])
+    if not safe:
+        raise RuntimeError("Vercel command is outside the publication allowlist")
+    token = os.environ.get("VERCEL_TOKEN", "").strip()
+    if not token:
+        raise RuntimeError("publication requires an explicitly supplied existing VERCEL_TOKEN; saved credentials, refresh, and login are disabled")
+    env = {k: v for k, v in os.environ.items()
+           if not k.startswith("VERCEL_") and k not in {"DEBUG", "NODE_OPTIONS", "NODE_DEBUG", "NODE_DEBUG_NATIVE"}
+           and k.lower() not in {"http_proxy", "https_proxy", "all_proxy"}}
+    env.update(VERCEL_TOKEN=token, VERCEL_PROJECT_ID=VERCEL_PROJECT_ID, VERCEL_ORG_ID=VERCEL_ORG_ID,
+               VERCEL_TELEMETRY_DISABLED="1", NO_UPDATE_NOTIFIER="1", CI="1")
+    with tempfile.TemporaryDirectory(prefix="gridiron-vercel-auth-") as isolated:
+        try:
+            version = subprocess.run(
+                ["vercel", "--version", "--global-config", isolated, "--non-interactive", "--no-color"],
+                check=True, capture_output=True, text=True, cwd=config.ROOT, env=env, stdin=subprocess.DEVNULL,
+            )
+            if version.stdout.strip() != "63.1.0":
+                raise RuntimeError("publication requires reviewed Vercel CLI 63.1.0; no authenticated command was run")
+            project = ["--project", VERCEL_PROJECT_ID] if arguments[0] == "deploy" else []
+            result = subprocess.run(
+                ["vercel", *arguments, *project, "--scope", VERCEL_SCOPE, "--non-interactive", "--no-color",
+                 "--global-config", isolated],
+                check=True, capture_output=True, text=True, cwd=config.ROOT, env=env, stdin=subprocess.DEVNULL,
+            )
+        except (subprocess.CalledProcessError, OSError):
+            # Never expose raw child output or trigger authentication recovery.
+            raise RuntimeError("Vercel command failed; no credential refresh or authentication was attempted") from None
+    return subprocess.CompletedProcess(result.args, result.returncode,
+                                       result.stdout.replace(token, "[REDACTED]"),
+                                       result.stderr.replace(token, "[REDACTED]"))
+
+
+def _is_vercel_url(url: str) -> bool:
+    try:
+        parsed = urllib.parse.urlsplit(url)
+        port = parsed.port
+    except ValueError:
+        return False
+    return (parsed.scheme == "https" and bool(parsed.hostname) and parsed.hostname.endswith(".vercel.app")
+            and parsed.username is None and parsed.password is None and port in (None, 443)
+            and not parsed.query and not parsed.fragment and parsed.path in ("", "/")
+            and not any(c.isspace() for c in url))
+
+
+class ProtectedPreviewError(RuntimeError):
+    """HTTP contents could not be verified without authenticated access."""
+
+
+class _NoRedirects(urllib.request.HTTPRedirectHandler):
+    def redirect_request(self, req, fp, code, msg, headers, newurl):
+        return None
+
+
+def _public_get(url: str) -> bytes:
+    """Fetch with no auth, cookies, proxy credentials, redirects, or bypass token."""
+    parsed = urllib.parse.urlsplit(url)
+    origin = urllib.parse.urlunsplit((parsed.scheme, parsed.netloc, "", "", ""))
+    if not _is_vercel_url(origin) or parsed.query or parsed.fragment:
+        raise RuntimeError("public verification requires an expected HTTPS Vercel origin")
+    opener = urllib.request.build_opener(urllib.request.ProxyHandler({}), _NoRedirects())
+    request = urllib.request.Request(url, headers={"Accept": "*/*"}, method="GET")
+    try:
+        with opener.open(request, timeout=20) as response:
+            body = response.read(2 * 1024 * 1024 + 1)
+            if len(body) > 2 * 1024 * 1024:
+                raise RuntimeError("public verification response exceeds the expected static asset limit")
+            return body
+    except urllib.error.HTTPError as exc:
+        if exc.code in {301, 302, 303, 307, 308, 401, 403}:
+            raise ProtectedPreviewError("unauthenticated HTTP access denied or redirected; preview contents unverified") from None
+        raise RuntimeError(f"public HTTP verification failed with status {exc.code}") from None
+    except (urllib.error.URLError, TimeoutError, OSError):
+        raise RuntimeError("public HTTP verification failed; no authentication fallback was attempted") from None
+
+
+def _verify_public_deployment(url: str) -> None:
+    if not _is_vercel_url(url):
+        raise RuntimeError("invalid deployment URL")
+    for route, path in (("/picks.csv", config.PICKS_FILE), ("/methodology", config.SITE_DIR / "methodology.html")):
+        if _public_get(url.rstrip("/") + route) != path.read_bytes():
+            raise RuntimeError(f"public deployment verification failed for {route}")
+
+
+def _publication_verification_path() -> Path:
+    return config.REPORTS_DIR / "publication-verification.json"
+
+
+def _record_publication_verification(sha: str, url: str, status: str, *, preview_verified: bool,
+                                     production_verified: bool = False) -> None:
+    path = _publication_verification_path()
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps({
+        "source_commit": sha, "deployment_url": url, "status": status,
+        "preview_http_verified": preview_verified, "production_http_verified": production_verified,
+        "verification_route": "unauthenticated HTTPS only", "credential_or_protection_changes": False,
+        "checked_at": dt.datetime.now(dt.timezone.utc).isoformat(timespec="seconds"),
+    }, indent=2) + "\n")
 
 
 def _git_commit(message: str) -> None:
@@ -417,6 +528,10 @@ def _git_commit(message: str) -> None:
 
 def _publish(args) -> None:
     """Fail closed: push the recorded commit before deployment, verify before promote."""
+    if (config.ROOT / ".vercel" / "anonymous.json").exists():
+        raise RuntimeError("publication refuses anonymous deployment credentials; no credential state was changed")
+    if not os.environ.get("VERCEL_TOKEN", "").strip():
+        raise RuntimeError("publication requires an explicitly supplied existing VERCEL_TOKEN; no push or deployment was attempted")
     if _git("status", "--porcelain").stdout.strip():
         raise RuntimeError("checkout changed during publication; refusing to push or deploy")
     sha = _git("rev-parse", "HEAD").stdout.strip()
@@ -431,18 +546,22 @@ def _publish(args) -> None:
     state = inspected.stdout + "\n" + inspected.stderr
     if not re.search(r"^\s*(?:status|state)\s+(?:●\s*)?ready\s*$", state, re.IGNORECASE | re.MULTILINE):
         raise RuntimeError("deployment READY status was not confirmed; production alias not moved")
-    # Check the uploaded proof and methodology through the authenticated CLI
-    # before assigning production. No access/security settings are changed.
-    for route, expected in (("/picks.csv", config.PICKS_FILE.read_text()),
-                            ("/methodology", "nflverse")):
-        response = _vercel("curl", route, "--deployment", url)
-        valid = response.stdout == expected if route.endswith(".csv") else expected in response.stdout
-        if not valid:
-            raise RuntimeError(f"deployment verification failed for {route}; production alias not moved")
+    try:
+        _verify_public_deployment(url)
+    except ProtectedPreviewError:
+        _record_publication_verification(sha, url, "protected_unverified", preview_verified=False)
+        raise RuntimeError("protected preview HTTP is unverified; production was not promoted and no bypass credential was created") from None
+    except RuntimeError:
+        _record_publication_verification(sha, url, "preview_verification_failed", preview_verified=False)
+        raise
+    _record_publication_verification(sha, url, "preview_verified", preview_verified=True)
     _vercel("promote", url, "--yes")
-    production = _vercel("curl", "/picks.csv", "--deployment", "https://gridiron-model.vercel.app")
-    if production.stdout != config.PICKS_FILE.read_text():
-        raise RuntimeError("promotion returned but production pick proof does not match; inspect the alias before claiming publication")
+    try:
+        _verify_public_deployment("https://gridiron-model.vercel.app")
+    except RuntimeError:
+        _record_publication_verification(sha, url, "production_unverified", preview_verified=True)
+        raise
+    _record_publication_verification(sha, url, "public_production_verified", preview_verified=True, production_verified=True)
     print(f"published Git commit {sha}: {url}")
 
 

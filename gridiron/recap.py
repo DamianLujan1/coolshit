@@ -23,9 +23,25 @@ def write_recap(season: int, week: int, this_week: pl.DataFrame, last_week: pl.D
         lw_week = int(last_week["week"][0])
         hits = int(last_week["model_hit"].sum() or 0)
         n = last_week.filter(pl.col("model_hit").is_not_null()).height
-        mk = int(last_week["market_hit"].sum() or 0)
-        lines.append(f"Last week the model went {hits}-{n - hits}. The moneyline favorite went {mk}-{n - mk} on the same games, so "
-                     + ("we beat the market this week." if hits > mk else "the market did better." if hits < mk else "we tied the market."))
+        pushes = last_week.filter(pl.col("model_hit").is_null()).height
+        lines.append(f"In Week {lw_week}, the model went {hits}-{n - hits} on {n} decisive graded games."
+                     + (f" There were {pushes} tied game(s), counted as pushes and excluded from win percentages." if pushes else ""))
+        common = last_week.filter(pl.col("model_hit").is_not_null() & pl.col("market_hit").is_not_null())
+        if common.height:
+            model_common = int(common["model_hit"].sum())
+            market_common = int(common["market_hit"].sum())
+            missing = n - common.height
+            lines.append(
+                f"On the {common.height} decisive games with closing moneylines, the model went "
+                f"{model_common}-{common.height - model_common} and the moneyline favorite went "
+                f"{market_common}-{common.height - market_common}, so "
+                + ("we beat the market on those games." if model_common > market_common
+                   else "the market did better on those games." if model_common < market_common
+                   else "we tied the market on those games.")
+                + (f" Closing moneylines were unavailable for {missing} decisive game(s)." if missing else "")
+            )
+        else:
+            lines.append("No decisive graded games have closing moneylines available, so there is no market comparison yet.")
         wrong = last_week.filter(pl.col("model_hit") == 0).sort("pick_prob", descending=True)
         if wrong.height:
             w = wrong.row(0, named=True)
@@ -63,6 +79,6 @@ def write_recap(season: int, week: int, this_week: pl.DataFrame, last_week: pl.D
         lines.append("No picks this week.")
         lines.append("")
 
-    lines.append("Every pick is timestamped before kickoff and committed to a public git log, so nothing gets edited after the fact. "
+    lines.append("The append-only pick log preserves each original prediction and its recorded timestamp. "
                  "This is analysis for entertainment, not betting advice.")
     return "\n".join(lines) + "\n"

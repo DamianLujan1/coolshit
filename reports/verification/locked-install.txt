@@ -1,0 +1,10 @@
+Resolved 35 packages in 1ms
+   Building gridiron-model @ file:///Users/damianlujan/Documents/Codex/2026-10-08/task/coolshit
+INFO add_decision: Id::<PubGrubPackage>(0) @ 0a0.dev0 without checking dependencies
+INFO add_decision: Id::<PubGrubPackage>(1) @ 84.0.0 without checking dependencies
+      Built gridiron-model @ file:///Users/damianlujan/Documents/Codex/2026-10-08/task/coolshit
+Prepared 1 package in 354ms
+Uninstalled 1 package in 0.51ms
+Installed 1 package in 1ms
+ - gridiron-model==0.1.0 (from file:///Users/damianlujan/Documents/Codex/2026-10-08/task/coolshit)
+ + gridiron-model==0.1.1 (from file:///Users/damianlujan/Documents/Codex/2026-10-08/task/coolshit)

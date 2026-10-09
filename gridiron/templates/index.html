@@ -3,7 +3,8 @@
 {% block body %}
 {% if picks %}
 <h2>Week {{ week }}, {{ season }} season</h2>
-<p class="muted">Win probabilities from the model. Every pick below was logged with a timestamp before kickoff and committed to a public git history. Nothing is edited after the fact.</p>
+<p class="muted">Win probabilities from the model. Every pick below was logged with a timestamp before kickoff. Original picks are preserved in the append-only record; publication is a separate explicit step.</p>
+<p class="small muted">The original 15 Week 5 picks from version 0.1.0 remain unchanged. A later quarterback feature repair applies to future predictions; see <a href="/methodology">the methodology and rebuilt audit</a>.</p>
 <table>
 <thead><tr><th>Kickoff</th><th>Game</th><th>Pick</th><th class="num">Win prob</th><th>Confidence</th></tr></thead>
 <tbody>

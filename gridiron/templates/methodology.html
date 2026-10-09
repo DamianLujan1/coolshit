@@ -7,16 +7,16 @@
 <h3>What goes in</h3>
 <p>Every play in the NFL has an expected points value before and after the snap. The difference, expected points added or EPA, measures how much a play helped or hurt. We total that up per team and per game, split into passing and rushing, on offense and on defense. We also track success rate (the share of plays that keep an offense on schedule) and how efficient a team is on first and second down.</p>
 <p>Recent games count more than old ones. Each number is a weighted average of the team's earlier games this season, where every game back in time counts about 15% less. In September there is not much to go on, so the average starts from last season's number, pulled halfway toward league average. By mid-season the current year dominates.</p>
-<p>On top of team strength: home field, days of rest for each side, whether either team is coming off a bye, whether it is a division game, and the starting quarterback's recent EPA per dropback. When a starter changes, the new quarterback brings his own history, and a quarterback with little history is treated as roughly replacement level until he proves otherwise.</p>
+<p>On top of team strength: home field, days of rest for each side, whether either team is coming off a bye, whether it is a division game, and a quarterback estimate. A timestamped quarterback report can be used only if it was observed before the prediction. Otherwise the model uses the dominant passer from the team's last completed game, or a replacement-level estimate if no earlier passer is available. That fallback may miss injuries or planned starter changes; it never discovers a starter by looking at the game it is predicting.</p>
 
 <h3>What never goes in</h3>
-<p>Betting lines. The closing spread and moneyline are used only to grade the model against the market, never as inputs. Nothing from after kickoff is ever used for that game: the feature pipeline has an automated test that scrambles every play from a game and all later games and checks that the game's inputs do not change.</p>
+<p>Betting lines. The closing spread and moneyline are used only to grade the model against the market, never as inputs. Historical predictions use a common Tuesday cutoff for each week. Only earlier completed games contribute team or quarterback performance. Regression tests change passer identities and dropback counts and remove target and future plays; the target game's features must stay unchanged.</p>
 
 <h3>The model itself</h3>
-<p>Stage one is a logistic regression on the differences between the two teams' numbers. Stage two is a gradient-boosted tree model on the same inputs, which only ships if it beats stage one on held-out seasons.{% if backtest %} Right now <strong>{{ 'stage two' if backtest.stage_choice == 'stage2' else 'stage one' }}</strong> ships.{% endif %}</p>
+<p>Stage one is a logistic regression on the differences between the two teams' numbers. Stage two is a gradient-boosted tree model on the same inputs, which can ship only if it beats stage one on both Brier score and log loss in the 2022 selection season.{% if backtest %} Right now <strong>{{ 'stage two' if backtest.stage_choice == 'stage2' else 'stage one' }}</strong> ships.{% endif %}</p>
 
 <h3>How it was tested</h3>
-<p>Walk-forward: for every week of the 2023, 2024 and 2025 seasons, the model is trained only on earlier seasons and earlier weeks of that season, then predicts that week. No peeking.</p>
+<p>The model choice is made using 2022 alone. Its settings are then frozen for a 2023–2025 audit: each week is predicted from earlier weeks whose games were completed before the prediction cutoff. Both models are reported even when the simpler model is selected. Probabilities describe the chance of winning conditional on a decisive result. Ties are excluded from binary win-probability training and backtest scores; live ties remain visible as pushes in the record.</p>
 {% if backtest %}
 <table>
 <thead><tr><th>Who</th><th class="num">Games</th><th class="num">Accuracy</th><th class="num">Brier</th><th class="num">Log loss</th></tr></thead>
@@ -27,12 +27,15 @@
 {% endif %}
 {% endfor %}
 </tbody></table>
-{% set m = backtest.combined[backtest.stage_choice] %}{% set mk = backtest.combined['p_base_market'] %}
+{% set comparison = backtest.market_matched.combined if backtest.market_matched is defined else backtest.combined %}
+{% set m = comparison[backtest.stage_choice] %}{% set mk = comparison['p_base_market'] %}
+{% if m.n and mk.n %}
 {% if m.log_loss < mk.log_loss and m.accuracy > mk.accuracy %}
-<p>Over those three seasons the model beat the market on both accuracy and log loss. Be suspicious of that until it holds on live picks.</p>
+<p>On the same {{ m.n }} decisive games over those three seasons, the model beat the market on both accuracy and log loss. Be suspicious of that until it holds on live picks.</p>
 {% else %}
-<p><strong>The model does not beat the closing line.</strong> The market's vig-free probabilities scored {{ '%.1f'|format(mk.accuracy * 100) }}% accuracy and {{ '%.4f'|format(mk.log_loss) }} log loss; the model scored {{ '%.1f'|format(m.accuracy * 100) }}% and {{ '%.4f'|format(m.log_loss) }}. That is the expected result for a model built on public data, and the running record on this site will show it either way. What the model does well is calibration: when it says 70%, the home team has won about 70% of the time.</p>
+<p><strong>The model does not beat the closing line.</strong> On the same {{ m.n }} decisive games, the market's vig-free probabilities scored {{ '%.1f'|format(mk.accuracy * 100) }}% accuracy and {{ '%.4f'|format(mk.log_loss) }} log loss; the model scored {{ '%.1f'|format(m.accuracy * 100) }}% and {{ '%.4f'|format(m.log_loss) }}. The running record will show future results either way. Calibration is measured below rather than assumed.</p>
 {% endif %}
+{% else %}<p>There are no matched games with valid moneylines for a market comparison.</p>{% endif %}
 <h3>Calibration</h3>
 <p class="muted small">Games are grouped by the model's predicted home-win probability. If the model is honest, the observed rate should track the predicted rate.</p>
 <table>
@@ -44,7 +47,11 @@
 </tbody></table>
 {% endif %}
 
+<h3>What the historical results can tell us</h3>
+<p>This is a rebuilt historical audit using the latest nflverse files, not a replay of archived Tuesday data releases. Later statistical corrections and revised schedules can remain in those files. Current schedule starter names do not prove what was known on a historical Tuesday, so they are ignored unless separately timestamped evidence exists. Completion is conservatively approximated by a final score and at least 12 hours since kickoff. Closing market odds are a later benchmark and may have had more information than the model.</p>
+<p>The 15 Week 5 picks issued with version 0.1.0 are preserved exactly as originally published. The quarterback repair changes future predictions and this rebuilt audit; it does not replace those original picks or invent missing historical provenance.</p>
+
 <h3>Data and attribution</h3>
-<p>All data comes from the <a href="https://github.com/nflverse" rel="noopener">nflverse</a> project (play-by-play, schedules, scores and closing lines), released under <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC BY 4.0</a>, and is loaded with the nflreadpy package. FTN charting data is not used. The code is open; the pick log is append-only and committed to git with a pre-kickoff timestamp on every row.</p>
+<p>All data comes from the <a href="https://github.com/nflverse" rel="noopener">nflverse</a> project (play-by-play, team and player statistics, schedules, scores and closing lines), released under <a href="https://creativecommons.org/licenses/by/4.0/" rel="noopener">CC BY 4.0</a>, and is loaded with the nflreadpy package. FTN charting and participation data are not used. The code is open; the pick log is append-only with a pre-kickoff timestamp on every row. New predictions also retain their quarterback inputs and provenance.</p>
 <p>Team names on this site are city names and standard abbreviations. No league or team logos, wordmarks or trademarks are used, and this site is not affiliated with the NFL.</p>
 {% endblock %}

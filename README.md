@@ -1,138 +1,92 @@
 # Gridiron Model
 
-NFL game win probabilities, published weekly with a public, timestamped record of every hit and miss.
+NFL game win probabilities with an append-only pick history, a public record, and honest comparisons with the market. **For entertainment only; not betting advice.** City names and abbreviations only; no logos, fantasy, other leagues, or paid tier.
 
-One command on Tuesday night fetches the latest data, grades last week, retrains, logs this week's picks,
-updates the running record against three baselines, writes a recap and regenerates the site.
+Version 0.1.1 repairs a historical quarterback identity leak. All 15 Week 5 picks issued with version 0.1.0 remain byte-for-byte unchanged. They are not rerun or relabeled as repaired predictions. The new backtest replaces the flawed research results, not the original picks.
 
-**Picks are analysis for entertainment and are not betting advice.**
+## Local setup and verification
 
-## Clone to picks in five minutes
-
-Requires Python 3.11+ and [uv](https://docs.astral.sh/uv/) (or plain `pip`).
+Python 3.12+ and [uv](https://docs.astral.sh/uv/) are required. Direct dependencies and the build backend are pinned in `pyproject.toml`; `uv.lock` locks transitive dependencies. The repair was verified on macOS with Python 3.14.6.
 
 ```bash
-git clone <this repo> gridiron && cd gridiron
-uv venv .venv && uv pip install -p .venv/bin/python -e ".[dev]"   # or: python -m venv .venv && .venv/bin/pip install -e ".[dev]"
-.venv/bin/python -m pytest                                        # 14 tests, about a second
-.venv/bin/python -m gridiron fetch                                # downloads ~140 MB of nflverse parquet into data/cache (once)
-.venv/bin/python -m gridiron backtest                             # ~25 s; writes reports/backtest.md and picks which stage ships
-.venv/bin/python -m gridiron weekly --no-commit                   # grades, trains, logs picks, writes the recap and site/
+uv sync --locked --extra dev
+.venv/bin/python -m pytest
+.venv/bin/python -m gridiron fetch
+.venv/bin/python -m gridiron validate
+.venv/bin/python -m gridiron backtest --offline
 ```
 
-Open `site/index.html` for the picks, `recaps/<season>_week_<ww>.md` for the recap.
+`fetch` downloads schedules, play-by-play, weekly team statistics and weekly player statistics through [nflreadpy](https://github.com/nflverse/nflreadpy). Seasons 2015–2026 are modeled; 2014 supplies priors. All processing uses Polars. Team/player statistics are cached and validated for coverage; model performance features are derived from play-by-play. Betting data is never a feature.
 
-## The Tuesday-night command
+Caches live under `data/cache/` and are gitignored. Completed seasons are reused; schedules and current-season datasets refresh in weekly online runs. An unavailable download can use a cached copy with a warning. `--offline` never downloads and fails on a cache miss. `validate` is offline. Validation checks schemas, seasons, teams, duplicate keys, scores, stale unfinished games, and coverage. New cache metadata records actual retrieval time, source loader, version and checksum; a legacy cache does not invent a retrieval timestamp.
+
+Only PBP, schedules, team stats and player stats are allowed. **FTN charting and participation datasets are excluded.** Data by [nflverse](https://github.com/nflverse), with visible [CC BY 4.0 attribution](https://creativecommons.org/licenses/by/4.0/) in the site footer.
+
+## Weekly local run and rehearsal
 
 ```bash
-make weekly            # = .venv/bin/python -m gridiron weekly
+make weekly
+# or: .venv/bin/python -m gridiron weekly --offline
 ```
 
-It runs, in order:
+This fetches/validates, retrains the selected model, appends genuinely new pre-kickoff picks, grades existing picks, updates the record, writes a recap and builds the static site. It is local by default. `--commit` explicitly adds a local artifact commit. `--season N --week W` selects a week; already-issued game IDs are skipped. New picks use the real issuance time and are checked against the real clock before append. No prior pick row or CSV header is rewritten.
 
-1. **fetch**: re-downloads the schedules file and the current season's play-by-play; completed seasons stay cached.
-   If the download fails and a cache exists, it uses the cache and warns.
-2. **validate**: fails loudly if a season is missing, a team abbreviation is unmapped, a game that already
-   kicked off has no score, or a scored game has no play-by-play.
-3. **grade**: joins every logged pick to final scores, grades the model and the three baselines, writes
-   `data/picks/graded.csv` and `data/picks/record.json`.
-4. **train and pick**: trains the shipping stage on every completed game, predicts the upcoming week and appends
-   the picks to `data/picks/picks.csv`. Already-picked games are skipped. A pick for a game that has
-   kicked off is refused.
-5. **recap**: writes `recaps/<season>_week_<ww>.md`, a plain-English script for a 60-second video or a text post.
-6. **site**: regenerates `site/` (picks, record, methodology, attribution).
-7. **commit**: `git add` + `git commit` of picks, recaps, reports and site. Push it yourself, or add `--deploy`
-   to also run `vercel deploy --prod site`.
+A full rehearsal uses a new output directory:
 
-Flags: `--no-commit`, `--offline` (cache only), `--deploy`, `--season N --week W` to target a specific week,
-and the global `--now <ISO datetime>` to run as if it were another time (used for dry runs).
-
-## What is in the repo
-
-```
-gridiron/
-  config.py     constants: seasons, team codes and city names, EWMA settings, seed
-  data.py       nflreadpy loaders, parquet cache, team normalisation, kickoff times, validation
-  features.py   per-game team stats from play-by-play, rolling EWMA features with priors, QB features
-  models.py     stage 1 logistic regression, stage 2 LightGBM, walk-forward evaluation
-  evaluate.py   accuracy / Brier / log loss / calibration, the three baselines, the backtest report
-  picks.py      pick generation, append-only pick log, grading, running record
-  recap.py      markdown recap
-  site.py       static site generation (Jinja2 templates in gridiron/templates/)
-  cli.py        `gridiron` command line
-tests/          feature pipeline, leakage proof, grading and pick-log tests (synthetic data, offline)
-data/picks/     picks.csv (append-only, committed), graded.csv, record.json
-reports/        backtest.md / backtest.json (walk-forward results; decides which stage ships)
-recaps/         one markdown recap per week
-site/           generated static site, deployed to Vercel
+```bash
+make dry-run OUTPUT_DIR=/tmp/gridiron-rehearsal NOW=2026-10-07T21:00:00+00:00
+# Equivalent:
+.venv/bin/python -m gridiron --now 2026-10-07T21:00:00+00:00 weekly \
+  --offline --dry-run --output-dir /tmp/gridiron-rehearsal
 ```
 
-Notebooks are welcome under `notebooks/` for exploration, but nothing in them is the source of truth.
+Use only one of those commands for a given directory. A rehearsal copies the original record, generates isolated picks/grades/recap/site, labels the directory with `DRY_RUN.json`, and cannot commit, push or deploy. It is a simulation against rebuilt data, not evidence that a forecast existed historically. Global `--now` is rejected for canonical pick/history/report mutations. `picks --dry-run` prints predictions without logging them.
 
-## Data
+Newly appended picks retain a separate append-only quarterback provenance record in `data/picks/qb_inputs.jsonl`. It contains the resolved identity, source and source game, evidence/observation timestamps, prediction cutoff and EPA estimate. Legacy picks have no invented provenance.
 
-Everything comes from [nflverse](https://github.com/nflverse) through the
-[nflreadpy](https://github.com/nflverse/nflreadpy) package: the schedules/games dataset (scores, rest days,
-closing spread, total and moneylines) and play-by-play with expected points added. Seasons 2015 to 2026 are
-modeled; 2014 is fetched only to seed the 2015 priors.
+## Explicit one-command publication
 
-- nflverse data is released under [CC BY 4.0](https://creativecommons.org/licenses/by/4.0/). Attribution is
-  in the footer of every page of the site and here: **data by nflverse**.
-- FTN charting data is share-alike licensed and is never loaded.
-- The closing spread and moneylines are the benchmark. They are never model inputs.
-- Team names are city names and standard abbreviations only. No logos, wordmarks or team nicknames appear
-  anywhere in the product; the NFL is not shy about enforcing its marks.
+After review, approved Vercel setup and an upstream branch are in place:
 
-Data files live in `data/cache/` and are gitignored. Nothing larger than a few megabytes is committed.
+```bash
+make publish PUBLISH_BRANCH=main
+```
 
-## The model
+This is the explicit online weekly workflow through commit, push, deployment verification and promotion. It requires a clean reviewed checkout, an empty index, the named checked-out upstream branch, the `DamianLujan1/coolshit` remote, and a local link to the existing `gridiron-model` Vercel project. It refuses to create a new project implicitly. It pushes the artifact commit first, stages a production-target deployment without moving the public domain, verifies its pick CSV and methodology, then promotes it. Failed checks stop later steps; a pushed commit can remain even if deployment fails.
 
-**Features** (all computed from games that kicked off strictly before the game in question):
+This repair task does **not** run publication. See [deployment diagnosis](reports/deployment-diagnosis.md): the two Git deployment attempts failed `git_info_fail`; the old live site has no recorded Git SHA; local CLI/link setup remains outstanding. Do not change access permissions or persistent credentials without approval.
 
-- Offensive and defensive EPA per play, split pass/rush; success rate; early-down (1st and 2nd) EPA per play.
-  Each is an exponentially weighted average of the team's prior games this season (decay 0.85 per game) blended
-  with a prior worth four games, where the prior is last season's team mean pulled halfway to last season's
-  league mean. Week 1 is pure prior; by mid-season the current year dominates.
-- Home field (the model is oriented home vs. away, so the intercept is home-field advantage), neutral-site flag,
-  rest-day differential, bye-week flags, division-game flag, playoff flag.
-- Starting quarterback EPA per dropback: a dropback-weighted EWMA of the starter's prior games across seasons,
-  with a 150-dropback prior at replacement level (last season's league rate minus 0.05). The starter is the one
-  listed by nflverse (actual for played games, projected for the coming week), falling back to the team's
-  most recent starter. A new starter with no history is treated as replacement level.
+## Causal features and QB evidence
 
-**Stage 1** is a logistic regression on home-minus-away differences plus the flags.
-**Stage 2** is LightGBM on the same plus each side's raw values. Stage 2 ships only if it beats stage 1 on both
-log loss and Brier in the walk-forward holdout; `gridiron backtest` makes that call and writes it to
-`reports/backtest.json`, which `gridiron weekly` obeys.
+The model predicts home win probability conditional on a decisive result. Inputs are:
 
-**Evaluation** is strictly walk-forward: each test week of 2023, 2024 and 2025 is predicted by a model trained
-on earlier seasons and earlier weeks of that season only. Baselines: always pick home, the closing-spread
-favorite (probability from a normal margin model with sigma 13.5), and the vig-free moneyline. See
-`reports/backtest.md`. Short version as of the first build: the logistic model is about 64% accurate with
-good calibration, and it does not beat the closing line (about 68%). Calibration is what the picks are judged on.
+- Offensive/defensive pass and rush EPA per play, success rate and early-down EPA. Prior games receive exponentially decaying weights (0.85 per game). A four-game prior blends last season's team and league means equally.
+- Home advantage through the logistic intercept, neutral/playoff/division flags, rest difference and bye flags.
+- QB EPA per dropback with a 150-dropback replacement prior at last season's league rate minus 0.05; history decays by 0.90 per prior QB game.
 
-**Leakage** is treated as a critical bug. `tests/test_leakage.py` scrambles every play and score from a game
-onward and asserts that the game's features do not change, and checks that walk-forward training sets never
-contain the test week.
+Historical features use Tuesday **12:00 America/New_York before the week's first kickoff**, shared across the week. Prior-game information requires a final score and a conservative availability proxy of kickoff plus 12 hours. A postponed earlier-week game cannot enter before that cutoff. Live future-game features use the actual prediction time. Both history and previous-season priors obey that cutoff.
 
-## Engineering notes
+QB resolution accepts separate timestamped evidence only when both its source availability and capture time precede the prediction. Otherwise it uses the dominant passer from the team's most recent eligible completed game, or replacement level with no history. The dominant passer is a lagged proxy and may be an injury replacement; it is not a claim about an announced starter. The latest schedule's actual starter is **never** accepted as proof of historical Tuesday availability. Target-game PBP cannot choose that game's QB.
 
-- Python 3.11+, Polars, pinned dependencies in `pyproject.toml`, fixed seed (`config.SEED`), deterministic
-  ordering everywhere a sort could tie.
-- The pick log is append-only by construction: `append_picks` opens the file in append mode, skips games
-  already present, refuses games that have kicked off, and verifies the existing bytes are unchanged.
-  Git history is the audit trail.
-- `CHANGELOG.md` tracks model and pipeline changes.
+The feature API accepts an optional `qb_inputs` Polars frame with `game_id`, `team`, `qb_id`, `available_at`, `observed_at`, and `source`. Timestamp columns must be timezone-aware. Current weekly runs use the lagged fallback unless separately captured evidence is supplied through that API; no historical news archive is fabricated.
 
-## Deploying the site
+## Selection, audit and limitations
 
-Live at **https://gridiron-model.vercel.app** (Vercel project `gridiron-model`, deployed from `site/`).
+Stage 1 is fixed logistic regression. Stage 2 is fixed LightGBM. **Only 2022 selects the shipping stage:** boosting must strictly improve both Brier and log loss on the same decisive games. The choice is frozen before the 2023–2025 walk-forward audit. Each weekly training set contains only earlier weeks available at the prediction cutoff. Both models are reported regardless of selection. No hyperparameters are tuned on the audit.
 
-`site/` is plain HTML. `vercel.json` at the repo root tells Vercel to serve it with no build step, so connecting
-the GitHub repo to a Vercel project deploys on every push. Alternatively `make deploy` runs
-`vercel deploy --prod --yes site` with the Vercel CLI.
+[Backtest report](reports/backtest.md) and [JSON](reports/backtest.json) include each audit season and the combined accuracy, Brier, log loss, ECE and ten-bin calibration for both models and all baselines. Raw selection/audit prediction CSVs preserve inputs and provenance. Baselines are always home (fixed pre-2022 home-win rate for probability scoring), closing-spread favorite (normal margin model, sigma 13.5), and proportionally normalized no-vig moneylines. Missing odds do not drop model games; market comparisons use identical covered games.
 
-## Scope
+Tied games are excluded from binary training and historical scoring, reported explicitly, and recorded as pushes when grading published picks. A 0.5 probability picks home. Missing live benchmark odds remain ungraded for that benchmark, rather than silently becoming home picks.
 
-The game model and its public record come first. Fantasy projections, other leagues and any paid tier are out
-of scope until the model has graded at least two weeks of real picks.
+These results are a **rebuilt retrospective audit**, not an untouched prospective test. The prior flawed build already examined 2023–2025. Current nflverse files can include later statistical corrections and revised schedules; original Tuesday file vintages and true publication times are unavailable. Closing lines also contain information later than Tuesday. The lagged QB proxy can miss pregame injuries or starter changes. These limitations remain after removing target-game leakage.
+
+## Files
+
+- `gridiron/data.py`, `features.py`: loading, validation, causal inputs and provenance.
+- `models.py`, `evaluate.py`: fixed candidates, weekly training and independent selection/audit reports.
+- `cli.py`, `picks.py`: clock guards, append-only logging, grading and explicit publication.
+- `site.py`, `templates/`, `recap.py`: fan-facing site, methodology, record and recap.
+- `tests/`: offline synthetic causal, workflow, evaluation, data and grading regressions.
+- `data/picks/`: preserved picks and record; `reports/`: reproducible audit and repair evidence.
+
+On this Mac `/usr/bin/git` was blocked by the unaccepted Xcode license. The installed Command Line Tools Git worked without changing system settings: `PATH=/Library/Developer/CommandLineTools/usr/bin:$PATH` for Git-dependent local checks.

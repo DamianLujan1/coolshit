@@ -1,4 +1,10 @@
-"""Feature pipeline. Every feature for a game uses only games that kicked off strictly before it.
+"""Feature pipeline using information available before each prediction cutoff.
+
+Historical cutoffs are Tuesday noon America/New_York before the week's first
+kickoff. Rebuilt nflverse files are not historical data vintages: a scored game
+becomes eligible at kickoff + 12 hours, a conservative completion/availability
+proxy, not a verified publication timestamp. Latest schedule QB IDs are actual
+starters and provide no evidence of what was known at a historical cutoff.
 
 Pipeline
 --------
@@ -20,6 +26,7 @@ from __future__ import annotations
 
 import datetime as dt
 import logging
+import zoneinfo
 
 import numpy as np
 import polars as pl
@@ -40,6 +47,60 @@ STAGE2_FEATURES = (
     + [f"home_{s}" for s in TEAM_STATS] + [f"away_{s}" for s in TEAM_STATS]
     + ["home_qb_epa", "away_qb_epa"]
 )
+
+QB_PROVENANCE = [
+    "qb_id", "qb_source", "qb_source_detail", "qb_available_at",
+    "qb_observed_at", "qb_source_game_id",
+]
+
+
+def prediction_schedule(schedule: pl.DataFrame,
+                        prediction_time: dt.datetime | None = None) -> pl.DataFrame:
+    """Attach deterministic historical cutoffs and reconstructed availability.
+
+    A live timestamp overrides only still-unscored games that have not kicked
+    off. It never changes historical training features. The Tuesday cutoff is
+    shared by an entire NFL week, including postponed games in that week.
+    """
+    if prediction_time is not None:
+        if prediction_time.tzinfo is None or prediction_time.utcoffset() is None:
+            raise ValueError("prediction_time must be timezone-aware")
+        prediction_time = prediction_time.astimezone(dt.timezone.utc)
+    tz = zoneinfo.ZoneInfo(config.KICKOFF_TZ)
+    first = schedule.group_by(["season", "week"]).agg(pl.col("kickoff_utc").min())
+    cutoffs = {}
+    for season, week, kickoff in first.iter_rows():
+        local = kickoff.astimezone(tz)
+        day = local.date() - dt.timedelta(days=(local.weekday() - 1) % 7)
+        cutoff = dt.datetime.combine(day, dt.time(12), tzinfo=tz)
+        if cutoff >= local:
+            cutoff -= dt.timedelta(days=7)
+        cutoffs[(season, week)] = cutoff.astimezone(dt.timezone.utc)
+    times, available = [], []
+    for r in schedule.iter_rows(named=True):
+        cutoff = cutoffs[(r["season"], r["week"])]
+        if prediction_time is not None and r["result"] is None and r["kickoff_utc"] > prediction_time:
+            cutoff = prediction_time
+        times.append(cutoff)
+        if r["result"] is None:
+            available.append(None)
+        elif "history_available_at" in r:
+            available.append(r["history_available_at"])
+        else:
+            available.append(r["kickoff_utc"] + dt.timedelta(hours=12))
+    return schedule.with_columns(
+        pl.Series("prediction_time", times, dtype=pl.Datetime("us", "UTC")),
+        pl.Series("history_available_at", available, dtype=pl.Datetime("us", "UTC")),
+    )
+
+
+def _completed_stats(stats: pl.DataFrame, schedule: pl.DataFrame) -> pl.DataFrame:
+    """Join stats only to scored schedule games with a completion proxy."""
+    return stats.join(
+        schedule.select("game_id", "history_available_at")
+        .filter(pl.col("history_available_at").is_not_null()),
+        on="game_id", how="inner",
+    )
 
 
 # --------------------------------------------------------------------------- #
@@ -99,45 +160,49 @@ def _season_means(stats: pl.DataFrame) -> tuple[pl.DataFrame, pl.DataFrame]:
     return team, league
 
 
-def rolling_team_features(stats: pl.DataFrame, schedule: pl.DataFrame) -> pl.DataFrame:
-    """One row per (game_id, team) in `schedule` with pre-game rolling estimates.
+def rolling_team_features(stats: pl.DataFrame, schedule: pl.DataFrame,
+                          history_schedule: pl.DataFrame | None = None) -> pl.DataFrame:
+    """Rolling team estimates from completed games available at prediction time.
 
-    `schedule` supplies the ordering (kickoff_utc) and includes unplayed games, which get
-    features from the games before them. `stats` only has played games.
+    The full history schedule must include the seed year. A postponed earlier
+    game contributes only after its completion proxy passes the cutoff.
     """
-    long = pl.concat([
-        schedule.select("game_id", "season", "week", "kickoff_utc", pl.col("home_team").alias("team")),
-        schedule.select("game_id", "season", "week", "kickoff_utc", pl.col("away_team").alias("team")),
-    ]).join(stats.select(["game_id", "team", *TEAM_STATS]), on=["game_id", "team"], how="left")
-    long = long.sort(["team", "kickoff_utc", "game_id"])
-
-    team_means, league_means = _season_means(stats)
-    tm = {(r["season"], r["team"]): r for r in team_means.iter_rows(named=True)}
-    lm = {r["season"]: r for r in league_means.iter_rows(named=True)}
-
-    pieces = []
-    for (team, season), grp in long.group_by(["team", "season"], maintain_order=True):
-        prev_team = tm.get((season - 1, team))
-        prev_league = lm.get(season - 1)
-        cols = {}
-        for stat in TEAM_STATS:
-            if prev_league is None:
+    if "prediction_time" not in schedule.columns:
+        schedule = prediction_schedule(schedule)
+    history_schedule = history_schedule if history_schedule is not None else schedule
+    if "history_available_at" not in history_schedule.columns:
+        history_schedule = prediction_schedule(history_schedule)
+    completed = _completed_stats(stats, history_schedule)
+    history: dict[tuple[str, int], list[dict]] = {}
+    for r in completed.sort(["history_available_at", "game_id"]).iter_rows(named=True):
+        history.setdefault((r["team"], r["season"]), []).append(r)
+    prior_cache: dict[tuple[int, dt.datetime], tuple[dict, dict]] = {}
+    out = []
+    for game in schedule.iter_rows(named=True):
+        season, cutoff = game["season"], game["prediction_time"]
+        key = (season, cutoff)
+        if key not in prior_cache:
+            prev = completed.filter((pl.col("season") == season - 1)
+                                    & (pl.col("history_available_at") <= cutoff))
+            if prev.is_empty():
                 raise ValueError(f"no league prior available for season {season}; fetch {season - 1}")
-            prior = prev_league[stat]
-            if prev_team is not None and prev_team[stat] is not None:
-                prior = config.PRIOR_SHRINK * prev_team[stat] + (1 - config.PRIOR_SHRINK) * prev_league[stat]
-            vals = grp[stat].to_numpy().astype(float)
-            # unplayed games (NaN) contribute nothing and do not advance the series
-            played = ~np.isnan(vals)
-            series = _ewma_with_prior(vals[played], prior, config.EWMA_DECAY, config.PRIOR_WEIGHT_GAMES)
-            # each row's estimate = series at (number of played games strictly before it)
-            idx = np.cumsum(played) - played.astype(int)
-            cols[stat] = series[idx]
-        pieces.append(grp.select(["game_id", "team"]).with_columns(
-            [pl.Series(stat, cols[stat]) for stat in TEAM_STATS]
-        ))
-    feats = pl.concat(pieces)
-    return feats
+            team_means, league_means = _season_means(prev)
+            prior_cache[key] = ({r["team"]: r for r in team_means.iter_rows(named=True)},
+                                league_means.row(0, named=True))
+        tm, league = prior_cache[key]
+        for team in (game["home_team"], game["away_team"]):
+            games = [r for r in history.get((team, season), [])
+                     if r["history_available_at"] <= cutoff and r["game_id"] != game["game_id"]]
+            values = []
+            for stat in TEAM_STATS:
+                prior = league[stat]
+                if team in tm and tm[team][stat] is not None:
+                    prior = config.PRIOR_SHRINK * tm[team][stat] + (1 - config.PRIOR_SHRINK) * prior
+                previous = np.array([r[stat] for r in games if r[stat] is not None], dtype=float)
+                values.append(_ewma_with_prior(previous, prior, config.EWMA_DECAY,
+                                                config.PRIOR_WEIGHT_GAMES)[-1])
+            out.append((game["game_id"], team, *values))
+    return pl.DataFrame(out, schema=["game_id", "team", *TEAM_STATS], orient="row")
 
 
 # --------------------------------------------------------------------------- #
@@ -158,89 +223,151 @@ def qb_game_stats(pbp: pl.DataFrame) -> pl.DataFrame:
 
 
 def game_starters(qb_stats: pl.DataFrame) -> pl.DataFrame:
-    """The quarterback with the most dropbacks for each (game, team): the de facto starter."""
+    """Retrospective dominant passer, usable only as a lagged completed-game proxy.
+
+    This is deliberately not claimed to identify an announced or actual starter.
+    An injury replacement can have the most dropbacks in a completed game.
+    """
     return (qb_stats.sort(["game_id", "team", "dropbacks", "qb_id"], descending=[False, False, True, False])
             .group_by(["game_id", "team"], maintain_order=True).first()
             .select("game_id", "team", pl.col("qb_id").alias("starter_id")))
 
 
-def resolve_starters(schedule: pl.DataFrame, qb_stats: pl.DataFrame) -> pl.DataFrame:
-    """Starting QB id for every (game, team).
+def _qb_evidence(qb_inputs: pl.DataFrame | None) -> dict[tuple[str, str], list[dict]]:
+    """Validate separately captured evidence; latest schedule QB IDs never enter."""
+    if qb_inputs is None:
+        return {}
+    required = {"game_id", "team", "qb_id", "available_at", "observed_at", "source"}
+    if missing := required - set(qb_inputs.columns):
+        raise ValueError(f"QB evidence is missing required provenance: {sorted(missing)}")
+    result: dict[tuple[str, str], list[dict]] = {}
+    seen = {}
+    for r in qb_inputs.iter_rows(named=True):
+        for name in ("game_id", "team", "qb_id", "source"):
+            if not isinstance(r[name], str) or not r[name].strip():
+                raise ValueError(f"QB evidence requires a nonempty {name}")
+        for name in ("available_at", "observed_at"):
+            if not isinstance(r[name], dt.datetime) or r[name].tzinfo is None or r[name].utcoffset() is None:
+                raise ValueError(f"QB evidence {name} must be a timezone-aware timestamp")
+            r[name] = r[name].astimezone(dt.timezone.utc)
+        if r["available_at"] > r["observed_at"]:
+            raise ValueError("QB evidence cannot be observed before it became available")
+        key = (r["game_id"], r["team"], r["observed_at"])
+        if key in seen and seen[key] != r["qb_id"]:
+            raise ValueError("conflicting QB evidence at the same observation timestamp")
+        seen[key] = r["qb_id"]
+        result.setdefault((r["game_id"], r["team"]), []).append(r)
+    for entries in result.values():
+        entries.sort(key=lambda r: (r["observed_at"], r["available_at"], r["source"]))
+    return result
 
-    Priority: the schedule's listed starter (nflverse records the actual starter for played
-    games and the projected starter for the next week), else the team's starter from its most
-    recent played game. Returns game_id, team, qb_id.
+
+def resolve_starters(schedule: pl.DataFrame, qb_stats: pl.DataFrame, *,
+                     qb_inputs: pl.DataFrame | None = None) -> pl.DataFrame:
+    """Resolve each QB solely from pre-prediction evidence or completed history.
+
+    Supply the full schedule, including the seed season. Explicit evidence must
+    have both an availability timestamp and a capture timestamp no later than
+    the prediction cutoff. Otherwise use the team's dominant passer from its
+    most recent eligible completed game, or a replacement prior when unknown.
+    Target-game PBP and unversioned schedule QB IDs never resolve that game's QB.
     """
-    listed = pl.concat([
-        schedule.select("game_id", "season", "kickoff_utc", pl.col("home_team").alias("team"), pl.col("home_qb_id").alias("qb_id")),
-        schedule.select("game_id", "season", "kickoff_utc", pl.col("away_team").alias("team"), pl.col("away_qb_id").alias("qb_id")),
-    ])
-    actual = game_starters(qb_stats)
-    long = (listed.join(actual, on=["game_id", "team"], how="left")
-            .with_columns(pl.coalesce(["starter_id", "qb_id"]).alias("qb_id"))
-            .drop("starter_id")
-            .sort(["team", "kickoff_utc", "game_id"]))
-    # forward-fill within team so an upcoming game with no listed starter inherits the last one
-    long = long.with_columns(pl.col("qb_id").forward_fill().over("team", order_by="kickoff_utc"))
-    return long.select("game_id", "team", "qb_id")
+    if "prediction_time" not in schedule.columns:
+        schedule = prediction_schedule(schedule)
+    evidence = _qb_evidence(qb_inputs)
+    actual = game_starters(_completed_stats(qb_stats, schedule))
+    completed = actual.join(schedule.select("game_id", "history_available_at"), on="game_id")
+    history: dict[str, list[dict]] = {}
+    for r in completed.sort(["history_available_at", "game_id"]).iter_rows(named=True):
+        history.setdefault(r["team"], []).append(r)
+    rows = []
+    for game in schedule.iter_rows(named=True):
+        cutoff = game["prediction_time"]
+        for team in (game["home_team"], game["away_team"]):
+            explicit = [r for r in evidence.get((game["game_id"], team), [])
+                        if r["available_at"] <= cutoff and r["observed_at"] <= cutoff]
+            prior_games = [r for r in history.get(team, [])
+                           if r["history_available_at"] <= cutoff and r["game_id"] != game["game_id"]]
+            if explicit:
+                r = explicit[-1]
+                values = (r["qb_id"], "timestamped_pre_prediction", r["source"],
+                          r["available_at"], r["observed_at"], None)
+            elif prior_games:
+                r = prior_games[-1]
+                values = (r["starter_id"], "lagged_completed_game", "prior-game dominant passer; kickoff + 12h availability proxy",
+                          r["history_available_at"], None, r["game_id"])
+            else:
+                values = (None, "replacement_no_history", "no eligible QB evidence or completed-game passer", None, None, None)
+            rows.append((game["game_id"], team, *values))
+    schema = {"game_id": pl.String, "team": pl.String, **{name: pl.String for name in QB_PROVENANCE}}
+    schema.update({"qb_available_at": pl.Datetime("us", "UTC"), "qb_observed_at": pl.Datetime("us", "UTC")})
+    return pl.DataFrame(rows, schema=schema, orient="row")
 
 
 def rolling_qb_features(qb_stats: pl.DataFrame, starters: pl.DataFrame, schedule: pl.DataFrame) -> pl.DataFrame:
-    """Pre-game EPA per dropback estimate for each (game, team)'s starter.
+    """EPA/dropback estimate from the resolved QB's completed prior games.
 
-    est = (sum w^age * epa_sum + K * prior) / (sum w^age * dropbacks + K), over the QB's prior
-    games in any season. prior = last season's league EPA/dropback minus a replacement penalty.
+    Historical games and the previous-season league replacement prior must be
+    available at the prediction cutoff, not merely before the target kickoff.
     """
-    league = (qb_stats.group_by("season")
-              .agg((pl.col("qb_epa_sum").sum() / pl.col("dropbacks").sum()).alias("lg"))
-              .to_dict(as_series=False))
-    league_rate = dict(zip(league["season"], league["lg"]))
-
-    # the QB's history, one row per game (a data glitch can list a passer for both teams), ordered by kickoff
-    hist = (qb_stats.join(schedule.select("game_id", "kickoff_utc"), on="game_id", how="inner")
-            .group_by(["qb_id", "game_id", "kickoff_utc"]).agg(pl.col("dropbacks").sum(), pl.col("qb_epa_sum").sum())
-            .sort(["qb_id", "kickoff_utc", "game_id"]))
-    hist_by_qb: dict[str, list[tuple[dt.datetime, int, float]]] = {}
+    if "prediction_time" not in schedule.columns:
+        schedule = prediction_schedule(schedule)
+    completed = _completed_stats(qb_stats, schedule)
+    hist = (completed.group_by(["qb_id", "game_id", "history_available_at"])
+            .agg(pl.col("dropbacks").sum(), pl.col("qb_epa_sum").sum())
+            .sort(["qb_id", "history_available_at", "game_id"]))
+    history: dict[str, list[dict]] = {}
     for r in hist.iter_rows(named=True):
-        hist_by_qb.setdefault(r["qb_id"], []).append((r["kickoff_utc"], r["dropbacks"], r["qb_epa_sum"]))
-
-    rows = starters.join(schedule.select("game_id", "season", "kickoff_utc"), on="game_id", how="inner")
-    out = []
+        history.setdefault(r["qb_id"], []).append(r)
+    prior_cache = {}
+    rows = starters.join(schedule.select("game_id", "season", "prediction_time"), on="game_id", how="inner")
+    estimates = []
     for r in rows.iter_rows(named=True):
-        season = r["season"]
-        if season - 1 not in league_rate:
-            raise ValueError(f"no league QB prior for season {season}")
-        prior = league_rate[season - 1] - config.QB_REPLACEMENT_PENALTY
+        season, cutoff = r["season"], r["prediction_time"]
+        key = (season, cutoff)
+        if key not in prior_cache:
+            previous = completed.filter((pl.col("season") == season - 1)
+                                        & (pl.col("history_available_at") <= cutoff))
+            if previous.is_empty():
+                raise ValueError(f"no league QB prior for season {season}")
+            prior_cache[key] = previous["qb_epa_sum"].sum() / previous["dropbacks"].sum() - config.QB_REPLACEMENT_PENALTY
+        prior = prior_cache[key]
         num, den = config.QB_PRIOR_DROPBACKS * prior, config.QB_PRIOR_DROPBACKS
-        games = [g for g in hist_by_qb.get(r["qb_id"], []) if g[0] < r["kickoff_utc"]]
-        # most recent first so age 0 is the last game played
-        for age, (_, n, s) in enumerate(reversed(games)):
+        games = [g for g in history.get(r["qb_id"], [])
+                 if g["history_available_at"] <= cutoff and g["game_id"] != r["game_id"]]
+        for age, game in enumerate(reversed(games)):
             w = config.QB_DECAY ** age
-            num += w * s
-            den += w * n
-        out.append((r["game_id"], r["team"], r["qb_id"], num / den, len(games)))
-    return pl.DataFrame(out, schema=["game_id", "team", "qb_id", "qb_epa", "qb_prior_games"], orient="row")
+            num += w * game["qb_epa_sum"]
+            den += w * game["dropbacks"]
+        estimates.append((r["game_id"], r["team"], num / den, len(games)))
+    values = pl.DataFrame(estimates, schema=["game_id", "team", "qb_epa", "qb_prior_games"], orient="row")
+    return starters.join(values, on=["game_id", "team"], how="inner")
 
 
 # --------------------------------------------------------------------------- #
 # 4. Game matrix
 # --------------------------------------------------------------------------- #
 
-def build_game_features(schedule: pl.DataFrame, pbp: pl.DataFrame) -> pl.DataFrame:
+def build_game_features(schedule: pl.DataFrame, pbp: pl.DataFrame, *,
+                        prediction_time: dt.datetime | None = None,
+                        qb_inputs: pl.DataFrame | None = None) -> pl.DataFrame:
     """One row per game with every model feature and the label.
 
     `schedule` and `pbp` should include the seed season: it supplies priors and quarterback
-    history but gets no rows of its own. Only games that kicked off before each game influence
-    its row.
+    history but gets no rows of its own. Historical rows use the Tuesday cutoff;
+    an explicit live prediction_time affects only future unplayed games.
     """
+    schedule = prediction_schedule(schedule, prediction_time)
     stats = team_game_stats(pbp)
     have_prior = set(stats["season"].unique().to_list())
     target = schedule.filter((pl.col("season") - 1).is_in(sorted(have_prior)))
-    team_feats = rolling_team_features(stats, target)
+    team_feats = rolling_team_features(stats, target, schedule)
     qbs = qb_game_stats(pbp)
-    starters = resolve_starters(target, qbs)
+    starters = resolve_starters(schedule, qbs, qb_inputs=qb_inputs).filter(pl.col("game_id").is_in(target["game_id"].implode()))
     qb_feats = rolling_qb_features(qbs, starters, schedule)
-    schedule = target
+    # Expose the QB actually used by the model, not the latest actual starter
+    # from nflverse. This also prevents misleading *_qb_id_right join columns.
+    schedule = target.drop([c for c in ("home_qb_id", "away_qb_id") if c in target.columns])
 
     side = team_feats.join(qb_feats, on=["game_id", "team"], how="left")
 

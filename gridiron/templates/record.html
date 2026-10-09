@@ -2,13 +2,13 @@
 {% block title %}Record | Gridiron Model{% endblock %}
 {% block body %}
 <h2>Running record vs. the baselines</h2>
-<p class="muted">Graded on the same games the model picked. Baselines are graded on the closing line from the nflverse schedules file. Brier score is the average squared error of the published probability; lower is better, 0.25 is a coin flip.</p>
+<p class="muted">Model results cover every issued pick with a final score. Each baseline covers only games with valid closing odds; missing odds are shown separately. Baselines are graded on the closing line from the nflverse schedules file. Brier score is the average squared error of the published probability; lower is better, 0.25 is a coin flip.</p>
 {% macro rec_table(block) -%}
 <table>
-<thead><tr><th>Who</th><th class="num">W</th><th class="num">L</th><th class="num">Push</th><th class="num">Win %</th><th class="num">Brier</th></tr></thead>
+<thead><tr><th>Who</th><th class="num">W</th><th class="num">L</th><th class="num">Push</th><th class="num">Missing</th><th class="num">Win %</th><th class="num">Brier</th></tr></thead>
 <tbody>
 {% for key, label in labels.items() %}
-<tr><td>{{ label }}</td><td class="num">{{ block[key].wins }}</td><td class="num">{{ block[key].losses }}</td><td class="num">{{ block[key].pushes }}</td>
+<tr><td>{{ label }}</td><td class="num">{{ block[key].wins }}</td><td class="num">{{ block[key].losses }}</td><td class="num">{{ block[key].pushes }}</td><td class="num">{{ block[key].missing|default(0) }}</td>
 <td class="num">{% if block[key].pct is not none %}{{ '%.1f'|format(block[key].pct * 100) }}%{% endif %}</td>
 <td class="num">{{ block[key].brier if block[key].brier is defined else '' }}</td></tr>
 {% endfor %}

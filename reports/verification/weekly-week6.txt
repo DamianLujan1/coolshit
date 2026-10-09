@@ -1,0 +1,30 @@
+WARNING gridiron.data: season 2022 has 271 regular-season games: one fewer than nominal; verify cancellation
+INFO gridiron: data ok: seasons 2014..2026, 3567 games, 591160 plays, upcoming (2026, 5)
+INFO gridiron: target: 2026 week 6
+INFO gridiron: stage1 trained on 3082 games; 14 picks, 14 newly logged
+# Week 6 picks, 2026 season
+
+No graded picks yet. This is week one of the public record, so everything from here counts.
+
+This week, 14 games. Here is where I land.
+
+- San Francisco over Washington at home, 87 percent, strong.
+- Los Angeles (LA) over Arizona at home, 81 percent, strong.
+- Kansas City over Los Angeles (LAC) at home, 75 percent, strong.
+- Indianapolis over Tennessee at home, 74 percent, confident.
+- New England over New York (NYJ) at home, 73 percent, confident.
+- Baltimore over Cleveland on the road, 72 percent, confident.
+- Jacksonville over Houston at home, 69 percent, confident.
+- Atlanta over Chicago at home, 68 percent, confident.
+- Carolina over Philadelphia on the road, 62 percent, lean.
+- Seattle over Denver on the road, 61 percent, lean.
+- Buffalo over Las Vegas on the road, 59 percent, lean.
+- Tampa Bay over Pittsburgh at home, 55 percent, lean.
+- New York (NYG) over New Orleans at home, 52 percent, coin flip.
+- Green Bay over Dallas at home, 51 percent, coin flip.
+
+8 of those I actually like. 2 are coin flips and I am only picking a side because the record demands it.
+
+The append-only pick log preserves each original prediction and its recorded timestamp. This is analysis for entertainment, not betting advice.
+
+record: model {'wins': 0, 'losses': 0, 'pushes': 0, 'missing': 0, 'pct': None}

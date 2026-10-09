@@ -3,6 +3,17 @@
 All notable changes to Gridiron Model. The pick log in `data/picks/picks.csv` is append-only and is not
 covered here; its git history is the record.
 
+## 0.1.1 - 2026-10-09 (local repair; unpublished)
+
+- Remove target-game PBP and unversioned schedule starter IDs from QB resolution. Use captured pre-prediction evidence or the lagged completed-game dominant passer/replacement prior; preserve source, observation and prediction timestamps for new picks.
+- Apply common historical Tuesday cutoffs and conservative completed-game availability to team/QB history and weekly training. Regression tests mutate passer identities, counts, target/future plays and schedule starter values.
+- Select logistic versus LightGBM using 2022 only, then freeze the choice for the 2023–2025 audit. Preserve both models' raw predictions, per-season/combined scoring and ten-bin calibration, and compare market/favorite baselines on identical games. Report ties and rebuilt-data limitations.
+- Add nflreadpy weekly team/player statistics, strict offline cache handling, schema/coverage checks and cache provenance. Exclude FTN and participation data explicitly.
+- Add transitive dependency lock and pin the build backend; correct the Python minimum to 3.12 for the pinned NumPy version.
+- Reject synthetic-clock canonical mutations; rehearse weekly outputs only in a fresh isolated directory. Preserve all original Week 5 picks and their legacy CSV schema. New QB provenance uses a separate append-only JSONL file.
+- Require explicit publication with clean-checkout/project/branch checks, commit, push, staged deployment verification and promotion. No publication was executed during this repair.
+- Correct missing-odds grading and recap comparisons, preserve ties as pushes, and remove unsupported public-publication/calibration claims from generated content.
+
 ## 0.1.0 - 2026-10-07
 
 First end-to-end version.

@@ -1,0 +1,26 @@
+{
+  "original_commit": "5caa7a732942721e3822a035b727d52902c11ab1",
+  "preserved_week5_picks": 15,
+  "files": {
+    "data/picks/picks.csv": {
+      "sha256": "a5039d5c2070268e663537a1daad8a3c0a7c81a2caf4a3e8c44fd95b808c39a5",
+      "bytes": 2295
+    },
+    "data/picks/graded.csv": {
+      "sha256": "7b51cf8aa50169dfe729931c79234d919c801411bfb1ff7dabdbf1e113f61375",
+      "bytes": 3642
+    },
+    "data/picks/record.json": {
+      "sha256": "84f02242d6eaddf416ff986109459fa26ffe745e47528eade545612bd922113a",
+      "bytes": 623
+    },
+    "site/picks.csv": {
+      "sha256": "a5039d5c2070268e663537a1daad8a3c0a7c81a2caf4a3e8c44fd95b808c39a5",
+      "bytes": 2295
+    },
+    "recaps/2026_week_05.md": {
+      "sha256": "fc649ffa241e6090e9760479999df33aa8511d0a1078247aa574dd11d3a3b88c",
+      "bytes": 1332
+    }
+  }
+}

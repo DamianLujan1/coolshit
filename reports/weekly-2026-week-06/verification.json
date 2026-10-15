@@ -1,0 +1,62 @@
+{
+  "verified_at": "2026-10-15T13:28:34.538922+00:00",
+  "prior_model_commit": "3c2475d46957947b95b714a67e2fc199cfcad36a",
+  "original_rows": 15,
+  "original_prefix_bytes": 2295,
+  "original_prefix_sha256": "a5039d5c2070268e663537a1daad8a3c0a7c81a2caf4a3e8c44fd95b808c39a5",
+  "original_prefix_preserved": true,
+  "total_rows": 29,
+  "new_rows": 14,
+  "picked_at_utc": [
+    "2026-10-15T13:24:59+00:00"
+  ],
+  "earliest_kickoff_utc": "2026-10-16T00:15:00+00:00",
+  "new_game_ids": [
+    "2026_06_SEA_DEN",
+    "2026_06_HOU_JAX",
+    "2026_06_BAL_CLE",
+    "2026_06_CAR_PHI",
+    "2026_06_CHI_ATL",
+    "2026_06_NO_NYG",
+    "2026_06_NYJ_NE",
+    "2026_06_PIT_TB",
+    "2026_06_TEN_IND",
+    "2026_06_ARI_LA",
+    "2026_06_BUF_LV",
+    "2026_06_LAC_KC",
+    "2026_06_DAL_GB",
+    "2026_06_WAS_SF"
+  ],
+  "files": [
+    {
+      "path": "data/picks/picks.csv",
+      "bytes": 4241,
+      "sha256": "5646c622c422245ee22b9281ef12719d67499c5dbab88c33ed95945f3b3d1388"
+    },
+    {
+      "path": "data/picks/qb_inputs.jsonl",
+      "bytes": 13082,
+      "sha256": "7f3d805def3afc7b43785bb018dc910d3da5d12c9df38c863f44114a7e0e69ac"
+    },
+    {
+      "path": "data/picks/qb_input_annotations.jsonl",
+      "bytes": 7846,
+      "sha256": "c1a4e74a458840582f2fc5e471874c8b80dc57710fd1d5ab00ad7a24bb85b57e"
+    },
+    {
+      "path": "data/picks/graded.csv",
+      "bytes": 7573,
+      "sha256": "0099f758c173a5f67e889e8d56ed3e5b340415f23aa0289560ed2b8a00bca830"
+    },
+    {
+      "path": "data/picks/record.json",
+      "bytes": 2047,
+      "sha256": "7bd44ac004ca0c21843b6259f046a6fbfecf5e00eb3125132e9bdc76ce18e69e"
+    },
+    {
+      "path": "recaps/2026_week_06.md",
+      "bytes": 1703,
+      "sha256": "084b32fb910e5e7e9f2e250b23751b8870b1e5d02d1dd3a7086214ac46a36e75"
+    }
+  ]
+}

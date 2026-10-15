@@ -3,6 +3,12 @@
 All notable changes to Gridiron Model. The pick log in `data/picks/picks.csv` is append-only and is not
 covered here; its git history is the record.
 
+## Weekly delivery and provenance clarification - 2026-10-15
+
+- Grade the 15 original Week 5 picks (10–4–1) and append 14 Week 6 picks issued at the actual pre-kickoff clock, with causal QB evidence. Preserve all original pick bytes.
+- Exclude unversioned target-schedule QB names from future provenance serialization. Preserve the issued evidence and add separate append-only annotations; causal numeric inputs and issued probabilities are unchanged.
+- Retain the frozen historical audit: the reconstructed models did not beat the market.
+
 ## Publication verification correction - 2026-10-09
 
 - Remove `vercel curl` from publication. Verify public assets as raw bytes over unauthenticated HTTPS, without proxies, cookies, auth headers, redirects or bypass tokens. Protected previews are explicitly recorded unverified and stop CLI promotion.

@@ -42,7 +42,7 @@ make dry-run OUTPUT_DIR=/tmp/gridiron-rehearsal NOW=2026-10-07T21:00:00+00:00
 
 Use only one of those commands for a given directory. A rehearsal copies the original record, generates isolated picks/grades/recap/site, labels the directory with `DRY_RUN.json`, and cannot commit, push or deploy. It is a simulation against rebuilt data, not evidence that a forecast existed historically. Global `--now` is rejected for canonical pick/history/report mutations. `picks --dry-run` prints predictions without logging them.
 
-Newly appended picks retain a separate append-only quarterback provenance record in `data/picks/qb_inputs.jsonl`. It contains the resolved identity, source and source game, evidence/observation timestamps, prediction cutoff and EPA estimate. Legacy picks have no invented provenance.
+Newly appended picks retain a separate append-only quarterback provenance record in `data/picks/qb_inputs.jsonl`. It contains the resolved identity, source and source game, evidence/observation timestamps, prediction cutoff and EPA estimate. Legacy picks have no invented provenance. `qb_input_annotations.jsonl` preserves append-only clarifications to issued evidence; October 15 annotations exclude unversioned schedule names that were stored alongside causal IDs but were never model inputs. Future provenance serialization excludes those names.
 
 ## Explicit one-command publication
 

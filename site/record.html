@@ -36,14 +36,118 @@ footer{border-top:1px solid var(--line);padding:16px 0;color:var(--muted);font-s
 <p class="muted">Model results cover every issued pick with a final score. Each baseline covers only games with valid closing odds; missing odds are shown separately. Baselines are graded on the closing line from the nflverse schedules file. Brier score is the average squared error of the published probability; lower is better, 0.25 is a coin flip.</p>
 
 
-<p>No graded picks yet. The first picks were logged for week 5 of 2026; they get graded once the games are final.</p>
+<h3>All graded picks (15 games)</h3>
+<table>
+<thead><tr><th>Who</th><th class="num">W</th><th class="num">L</th><th class="num">Push</th><th class="num">Missing</th><th class="num">Win %</th><th class="num">Brier</th></tr></thead>
+<tbody>
+
+<tr><td>Gridiron model</td><td class="num">10</td><td class="num">4</td><td class="num">1</td><td class="num">0</td>
+<td class="num">71.4%</td>
+<td class="num">0.2186</td></tr>
+
+<tr><td>Always home</td><td class="num">5</td><td class="num">9</td><td class="num">1</td><td class="num">0</td>
+<td class="num">35.7%</td>
+<td class="num"></td></tr>
+
+<tr><td>Closing-spread favorite</td><td class="num">9</td><td class="num">5</td><td class="num">1</td><td class="num">0</td>
+<td class="num">64.3%</td>
+<td class="num">0.2275</td></tr>
+
+<tr><td>Moneyline favorite</td><td class="num">9</td><td class="num">5</td><td class="num">1</td><td class="num">0</td>
+<td class="num">64.3%</td>
+<td class="num">0.2267</td></tr>
+
+</tbody></table>
+
+<h3>2026 season</h3>
+<table>
+<thead><tr><th>Who</th><th class="num">W</th><th class="num">L</th><th class="num">Push</th><th class="num">Missing</th><th class="num">Win %</th><th class="num">Brier</th></tr></thead>
+<tbody>
+
+<tr><td>Gridiron model</td><td class="num">10</td><td class="num">4</td><td class="num">1</td><td class="num">0</td>
+<td class="num">71.4%</td>
+<td class="num">0.2186</td></tr>
+
+<tr><td>Always home</td><td class="num">5</td><td class="num">9</td><td class="num">1</td><td class="num">0</td>
+<td class="num">35.7%</td>
+<td class="num"></td></tr>
+
+<tr><td>Closing-spread favorite</td><td class="num">9</td><td class="num">5</td><td class="num">1</td><td class="num">0</td>
+<td class="num">64.3%</td>
+<td class="num">0.2275</td></tr>
+
+<tr><td>Moneyline favorite</td><td class="num">9</td><td class="num">5</td><td class="num">1</td><td class="num">0</td>
+<td class="num">64.3%</td>
+<td class="num">0.2267</td></tr>
+
+</tbody></table>
+
+<h3>Week by week</h3>
+<table>
+<thead><tr><th>Season</th><th>Week</th><th class="num">Model</th><th class="num">Home</th><th class="num">Spread fav</th><th class="num">ML fav</th></tr></thead>
+<tbody>
+
+<tr><td>2026</td><td>5</td><td class="num">10-4</td><td class="num">5-9</td><td class="num">9-5</td><td class="num">9-5</td></tr>
+
+</tbody></table>
+<h3>Recent graded picks</h3>
+<table>
+<thead><tr><th>Week</th><th>Game</th><th>Pick</th><th class="num">Prob</th><th>Result</th></tr></thead>
+<tbody>
+
+<tr><td>2026 wk 5</td><td>TB 24 at DAL 16</td><td>Dallas</td><td class="num">64%</td>
+<td><span class="miss">miss</span></td></tr>
+
+<tr><td>2026 wk 5</td><td>PHI 17 at JAX 19</td><td>Jacksonville</td><td class="num">80%</td>
+<td><span class="hit">hit</span></td></tr>
+
+<tr><td>2026 wk 5</td><td>CHI 7 at GB 31</td><td>Green Bay</td><td class="num">52%</td>
+<td><span class="hit">hit</span></td></tr>
+
+<tr><td>2026 wk 5</td><td>CIN 31 at MIA 24</td><td>Cincinnati</td><td class="num">68%</td>
+<td><span class="hit">hit</span></td></tr>
+
+<tr><td>2026 wk 5</td><td>CLE 12 at NYJ 17</td><td>New York (NYJ)</td><td class="num">51%</td>
+<td><span class="hit">hit</span></td></tr>
+
+<tr><td>2026 wk 5</td><td>HOU 26 at TEN 3</td><td>Houston</td><td class="num">64%</td>
+<td><span class="hit">hit</span></td></tr>
+
+<tr><td>2026 wk 5</td><td>IND 22 at PIT 34</td><td>Pittsburgh</td><td class="num">50%</td>
+<td><span class="hit">hit</span></td></tr>
+
+<tr><td>2026 wk 5</td><td>LV 17 at NE 45</td><td>New England</td><td class="num">63%</td>
+<td><span class="hit">hit</span></td></tr>
+
+<tr><td>2026 wk 5</td><td>MIN 23 at NO 13</td><td>Minnesota</td><td class="num">57%</td>
+<td><span class="hit">hit</span></td></tr>
+
+<tr><td>2026 wk 5</td><td>NYG 27 at WAS 27</td><td>Washington</td><td class="num">65%</td>
+<td>push</td></tr>
+
+<tr><td>2026 wk 5</td><td>DEN 23 at LAC 17</td><td>Los Angeles (LAC)</td><td class="num">52%</td>
+<td><span class="miss">miss</span></td></tr>
+
+<tr><td>2026 wk 5</td><td>DET 45 at ARI 21</td><td>Detroit</td><td class="num">64%</td>
+<td><span class="hit">hit</span></td></tr>
+
+<tr><td>2026 wk 5</td><td>SF 32 at SEA 29</td><td>San Francisco</td><td class="num">62%</td>
+<td><span class="hit">hit</span></td></tr>
+
+<tr><td>2026 wk 5</td><td>BAL 30 at ATL 23</td><td>Atlanta</td><td class="num">60%</td>
+<td><span class="miss">miss</span></td></tr>
+
+<tr><td>2026 wk 5</td><td>BUF 37 at LA 34</td><td>Los Angeles (LA)</td><td class="num">65%</td>
+<td><span class="miss">miss</span></td></tr>
+
+</tbody></table>
 
 <p class="small muted">The full pick log, with pre-kickoff timestamps, is <a href="/picks.csv">picks.csv</a>. The record as data is <a href="/record.json">record.json</a>.</p>
 
 </div></main>
 <footer><div class="wrap">
 <p>Picks are analysis for entertainment only and are not betting advice.</p>
-<p>Data from <a href="https://github.com/nflverse" rel="noopener">nflverse</a> (CC BY 4.0), loaded with nflreadpy. Team names are city names and standard abbreviations only. This site is not affiliated with or endorsed by the NFL or any team. Model v0.1.1, generated 2026-10-09 01:42 UTC.</p>
+<p>Data from <a href="https://github.com/nflverse" rel="noopener">nflverse</a> (CC BY 4.0), loaded with nflreadpy. Team names are city names and standard abbreviations only. This site is not affiliated with or endorsed by the NFL or any team. Model v0.1.1, generated 2026-10-15 13:24 UTC.</p>
 </div></footer>
 </body>
 </html>

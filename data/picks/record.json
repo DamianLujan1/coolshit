@@ -1,34 +1,111 @@
 {
   "overall": {
     "model": {
-      "wins": 0,
-      "losses": 0,
-      "pushes": 0,
-      "pct": null
+      "wins": 10,
+      "losses": 4,
+      "pushes": 1,
+      "missing": 0,
+      "pct": 0.714,
+      "brier": 0.2186
     },
     "home": {
-      "wins": 0,
-      "losses": 0,
-      "pushes": 0,
-      "pct": null
+      "wins": 5,
+      "losses": 9,
+      "pushes": 1,
+      "missing": 0,
+      "pct": 0.357
     },
     "spread": {
-      "wins": 0,
-      "losses": 0,
-      "pushes": 0,
-      "pct": null
+      "wins": 9,
+      "losses": 5,
+      "pushes": 1,
+      "missing": 0,
+      "pct": 0.643,
+      "brier": 0.2275
     },
     "market": {
-      "wins": 0,
-      "losses": 0,
-      "pushes": 0,
-      "pct": null
+      "wins": 9,
+      "losses": 5,
+      "pushes": 1,
+      "missing": 0,
+      "pct": 0.643,
+      "brier": 0.2267
     }
   },
-  "seasons": {},
-  "weeks": [],
-  "n_graded": 0,
-  "n_pending": 15,
+  "seasons": {
+    "2026": {
+      "model": {
+        "wins": 10,
+        "losses": 4,
+        "pushes": 1,
+        "missing": 0,
+        "pct": 0.714,
+        "brier": 0.2186
+      },
+      "home": {
+        "wins": 5,
+        "losses": 9,
+        "pushes": 1,
+        "missing": 0,
+        "pct": 0.357
+      },
+      "spread": {
+        "wins": 9,
+        "losses": 5,
+        "pushes": 1,
+        "missing": 0,
+        "pct": 0.643,
+        "brier": 0.2275
+      },
+      "market": {
+        "wins": 9,
+        "losses": 5,
+        "pushes": 1,
+        "missing": 0,
+        "pct": 0.643,
+        "brier": 0.2267
+      }
+    }
+  },
+  "weeks": [
+    {
+      "season": 2026,
+      "week": 5,
+      "model": {
+        "wins": 10,
+        "losses": 4,
+        "pushes": 1,
+        "missing": 0,
+        "pct": 0.714,
+        "brier": 0.2186
+      },
+      "home": {
+        "wins": 5,
+        "losses": 9,
+        "pushes": 1,
+        "missing": 0,
+        "pct": 0.357
+      },
+      "spread": {
+        "wins": 9,
+        "losses": 5,
+        "pushes": 1,
+        "missing": 0,
+        "pct": 0.643,
+        "brier": 0.2275
+      },
+      "market": {
+        "wins": 9,
+        "losses": 5,
+        "pushes": 1,
+        "missing": 0,
+        "pct": 0.643,
+        "brier": 0.2267
+      }
+    }
+  ],
+  "n_graded": 15,
+  "n_pending": 14,
   "labels": {
     "model": "Gridiron model",
     "home": "Always home",

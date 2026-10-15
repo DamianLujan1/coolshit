@@ -20,6 +20,7 @@ import polars as pl
 
 from . import __version__, config
 from .evaluate import market_prob_home, spread_prob_home
+from .features import QB_PROVENANCE
 
 PICK_COLUMNS = [
     "picked_at_utc", "season", "week", "game_id", "kickoff_utc", "home_team", "away_team",
@@ -28,6 +29,10 @@ PICK_COLUMNS = [
 ]
 CANONICAL_PICKS_FILE = config.PICKS_FILE.resolve()
 PROVENANCE_COLUMN = "_qb_provenance"
+QB_INPUT_COLUMNS = ["prediction_time", *[
+    f"{side}_{field}" for side in ("home", "away")
+    for field in [*QB_PROVENANCE, "qb_epa", "qb_prior_games"]
+]]
 
 
 def confidence_label(pick_prob: float) -> str:
@@ -47,8 +52,9 @@ def make_picks(features: pl.DataFrame, p_home, season: int, week: int, stage: st
         p = r["p_home"]
         pick = r["home_team"] if p >= 0.5 else r["away_team"]
         pick_prob = p if p >= 0.5 else 1 - p
-        provenance = {key: value for key, value in r.items()
-                      if key.startswith(("home_qb_", "away_qb_")) or key == "prediction_time"}
+        # Latest schedule QB names/other metadata have no historical availability
+        # evidence and may disagree with the causal identity selected by features.
+        provenance = {key: r[key] for key in QB_INPUT_COLUMNS if key in r}
         rows.append({
             "picked_at_utc": now.isoformat(timespec="seconds"),
             "season": season, "week": week, "game_id": r["game_id"],
